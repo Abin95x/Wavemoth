@@ -19,7 +19,18 @@ class Settings(context: Context) {
         _stopOnSwipe.value = enabled
     }
 
+    private val _libraryGrid = MutableStateFlow(prefs.getBoolean(KEY_LIBRARY_GRID, false))
+
+    /** Show the Library as a grid of covers instead of a list. Off by default. */
+    val libraryGrid: StateFlow<Boolean> = _libraryGrid.asStateFlow()
+
+    fun setLibraryGrid(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_LIBRARY_GRID, enabled).apply()
+        _libraryGrid.value = enabled
+    }
+
     private companion object {
         const val KEY_STOP_ON_SWIPE = "stop_on_swipe"
+        const val KEY_LIBRARY_GRID = "library_grid"
     }
 }

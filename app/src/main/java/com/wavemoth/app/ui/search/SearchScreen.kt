@@ -83,6 +83,9 @@ import com.wavemoth.app.ui.theme.WavemothColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.debounce
@@ -115,7 +118,7 @@ val browseCategories = listOf(
     Category("Sleep", "sleep music"),
 )
 
-enum class SearchFilter(val label: String) { Songs("Songs"), Artists("Artists"), Albums("Albums"), Playlists("Playlists") }
+enum class SearchFilter(val label: String) { All("All"), Songs("Songs"), Artists("Artists"), Albums("Albums"), Playlists("Playlists") }
 
 data class SearchState(
     val query: String = "",
@@ -131,8 +134,8 @@ data class SearchState(
 
 /** Search songs, artists, albums or playlists; also reused (with a fixed query) for genre pages. */
 @OptIn(FlowPreview::class)
-class SearchViewModel(initialQuery: String = "") : ViewModel() {
-    private val _state = MutableStateFlow(SearchState(query = initialQuery))
+class SearchViewModel(initialQuery: String = "", initialFilter: SearchFilter = SearchFilter.All) : ViewModel() {
+    private val _state = MutableStateFlow(SearchState(query = initialQuery, filter = initialFilter))
     val state: StateFlow<SearchState> = _state
     private var searchJob: Job? = null
 
@@ -161,6 +164,7 @@ class SearchViewModel(initialQuery: String = "") : ViewModel() {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     when (filter) {
+                        SearchFilter.All -> searchAll(query)
                         SearchFilter.Songs -> Catalog.search(query).let { SearchState(songs = it.songs, nextPage = it.nextPage) }
                         SearchFilter.Artists -> SearchState(artists = Catalog.searchArtists(query))
                         SearchFilter.Albums -> SearchState(playlists = Catalog.searchPlaylists(query, true))
@@ -175,6 +179,21 @@ class SearchViewModel(initialQuery: String = "") : ViewModel() {
                 )
             }
         }
+    }
+
+    /** Every kind at once. Fails only if every one of the four searches fails. */
+    private suspend fun searchAll(query: String): SearchState = coroutineScope {
+        val songs = async { runCatching { Catalog.search(query) } }
+        val artists = async { runCatching { Catalog.searchArtists(query) } }
+        val albums = async { runCatching { Catalog.searchPlaylists(query, true) } }
+        val playlists = async { runCatching { Catalog.searchPlaylists(query, false) } }
+        val results = listOf(songs, artists, albums, playlists).awaitAll()
+        results.firstOrNull { it.isSuccess } ?: throw results.first().exceptionOrNull()!!
+        SearchState(
+            songs = songs.await().getOrNull()?.songs.orEmpty(),
+            artists = artists.await().getOrNull().orEmpty(),
+            playlists = (albums.await().getOrNull().orEmpty() + playlists.await().getOrNull().orEmpty()).distinctBy { it.url },
+        )
     }
 
     fun loadMore() {
@@ -218,25 +237,10 @@ fun SearchScreen(
             } else Column {
                 FilterTabs(state.filter, vm::onFilterChange)
                 when (state.filter) {
+                    SearchFilter.All -> AllResults(state, vm::retry, vm::onFilterChange, onOpenArtist, onOpenPlaylist)
                     SearchFilter.Songs -> SongResults(state, "Search", onLoadMore = vm::loadMore, onRetry = vm::retry)
-                    SearchFilter.Artists -> ResultList(state, vm::retry, state.artists, { it.url }) { artist ->
-                        ResultRow(
-                            title = artist.name,
-                            subtitle = "Artist" + if (artist.subscribers > 0) " · ${compactCount(artist.subscribers)} followers" else "",
-                            image = artist.thumbnail,
-                            round = true,
-                            onClick = { onOpenArtist(artist) },
-                        )
-                    }
-                    SearchFilter.Albums, SearchFilter.Playlists -> ResultList(state, vm::retry, state.playlists, { it.url }) { p ->
-                        ResultRow(
-                            title = p.name,
-                            subtitle = (if (p.isAlbum) "Album" else "Playlist") + if (p.owner.isNotBlank()) " · ${p.owner}" else "",
-                            image = p.thumbnail,
-                            round = false,
-                            onClick = { onOpenPlaylist(p) },
-                        )
-                    }
+                    SearchFilter.Artists -> ResultList(state, vm::retry, state.artists, { it.url }) { ArtistResult(it, onOpenArtist) }
+                    SearchFilter.Albums, SearchFilter.Playlists -> ResultList(state, vm::retry, state.playlists, { it.url }) { PlaylistResult(it, onOpenPlaylist) }
                 }
             }
         }
@@ -289,6 +293,84 @@ private fun <T> ResultList(state: SearchState, onRetry: () -> Unit, items: List<
         }
     }
 }
+
+/** The "All" tab: a few of each kind, each with "See all" to open its own tab. */
+@Composable
+private fun AllResults(
+    state: SearchState,
+    onRetry: () -> Unit,
+    onSeeAll: (SearchFilter) -> Unit,
+    onOpenArtist: (YouTubeSource.Artist) -> Unit,
+    onOpenPlaylist: (YouTubeSource.RemotePlaylist) -> Unit,
+) {
+    val actions = LocalSongActions.current
+    val albums = state.playlists.filter { it.isAlbum }
+    val playlists = state.playlists.filterNot { it.isAlbum }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+        when {
+            state.loading -> item { CenteredSpinner() }
+            state.error != null -> item { ErrorMessage(state.error, onRetry) }
+            state.songs.isEmpty() && state.artists.isEmpty() && state.playlists.isEmpty() -> item {
+                Text("Nothing found for \"${state.query}\"", color = WavemothColors.TextSecondary, modifier = Modifier.padding(20.dp))
+            }
+            else -> {
+                if (state.artists.isNotEmpty()) {
+                    item(key = "label:artists") { AllSectionLabel(SearchFilter.Artists, onSeeAll) }
+                    items(state.artists.take(3), key = { "artist:" + it.url }) { ArtistResult(it, onOpenArtist) }
+                }
+                if (state.songs.isNotEmpty()) {
+                    item(key = "label:songs") { AllSectionLabel(SearchFilter.Songs, onSeeAll) }
+                    itemsIndexed(state.songs.take(6), key = { _, s -> "song:" + s.id }) { i, song ->
+                        SongRow(
+                            song,
+                            onClick = { actions.play(state.songs, i, "Search") },
+                            playing = actions.currentSongId() == song.id,
+                            onMore = { actions.showOptions(song, null) },
+                        )
+                    }
+                }
+                if (albums.isNotEmpty()) {
+                    item(key = "label:albums") { AllSectionLabel(SearchFilter.Albums, onSeeAll) }
+                    items(albums.take(4), key = { "album:" + it.url }) { PlaylistResult(it, onOpenPlaylist) }
+                }
+                if (playlists.isNotEmpty()) {
+                    item(key = "label:playlists") { AllSectionLabel(SearchFilter.Playlists, onSeeAll) }
+                    items(playlists.take(4), key = { "playlist:" + it.url }) { PlaylistResult(it, onOpenPlaylist) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AllSectionLabel(filter: SearchFilter, onSeeAll: (SearchFilter) -> Unit) {
+    SectionLabel(filter.label, Modifier.padding(bottom = 0.dp)) {
+        Text(
+            "See all",
+            style = MaterialTheme.typography.labelMedium,
+            color = WavemothColors.Red,
+            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onSeeAll(filter) }.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun ArtistResult(artist: YouTubeSource.Artist, onOpen: (YouTubeSource.Artist) -> Unit) = ResultRow(
+    title = artist.name,
+    subtitle = "Artist" + if (artist.subscribers > 0) " · ${compactCount(artist.subscribers)} followers" else "",
+    image = artist.thumbnail,
+    round = true,
+    onClick = { onOpen(artist) },
+)
+
+@Composable
+private fun PlaylistResult(p: YouTubeSource.RemotePlaylist, onOpen: (YouTubeSource.RemotePlaylist) -> Unit) = ResultRow(
+    title = p.name,
+    subtitle = (if (p.isAlbum) "Album" else "Playlist") + if (p.owner.isNotBlank()) " · ${p.owner}" else "",
+    image = p.thumbnail,
+    round = false,
+    onClick = { onOpen(p) },
+)
 
 @Composable
 private fun ResultRow(title: String, subtitle: String, image: String, round: Boolean, onClick: () -> Unit) {

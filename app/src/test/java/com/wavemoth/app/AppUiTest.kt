@@ -20,6 +20,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
@@ -184,8 +185,34 @@ class AppUiTest {
         assertTrue(exists("Highest available", substring = true))
         click("Clear cache")
         waitForText("of saved songs", substring = true)
+        rule.onNodeWithText("Buy me a coffee").performScrollTo().performClick(); settle()
+        val opened = shadowOf(rule.activity).nextStartedActivity
+        assertEquals(Intent.ACTION_VIEW, opened.action)
+        assertEquals("https://buymeacoffee.com/abin95x", opened.dataString)
         clickDesc("Back")
         assertTrue(exists("PLAYLISTS"))
+    }
+
+    @Test
+    fun libraryGridView() {
+        launch()
+        tab("Library").performClick(); settle()
+        assertFalse(app.settings.libraryGrid.value)  // list by default
+
+        clickDesc("Show as grid")
+        assertTrue(app.settings.libraryGrid.value)
+        assertTrue(exists("Liked Songs"))
+        assertTrue(exists("Import playlist file"))
+        assertTrue(exists("My Playlist"))
+
+        clickDesc("Show as list")
+        assertFalse(app.settings.libraryGrid.value)
+        clickDesc("Show as grid")
+
+        // Tiles open what they show.
+        rule.onAllNodesWithText("My Playlist").onFirst().performClick(); settle()
+        assertFalse(exists("Import playlist file"))
+        assertTrue(exists("Mine 1"))
     }
 
     @Test
@@ -433,6 +460,28 @@ class AppUiTest {
         waitForText("pop hits result 1")
         clickDesc("Back")
         assertTrue(exists("BROWSE"))
+    }
+
+    @Test
+    fun searchAllTab() {
+        launch()
+        tab("Search").performClick(); settle()
+        rule.onNode(hasSetTextAction()).performTextInput("drake")
+
+        // All is the default and shows every kind of result.
+        waitForText("drake Official")
+        assertTrue(exists("drake result 1"))
+        assertTrue(exists("Album drake"))
+        assertTrue(exists("Playlist drake"))
+        assertTrue(exists("ARTISTS") && exists("SONGS") && exists("ALBUMS") && exists("PLAYLISTS"))
+
+        // "See all" opens that kind's own tab.
+        rule.onAllNodesWithText("See all").onFirst().performClick()
+        waitForText("1.5M followers", substring = true)
+        assertFalse(exists("drake result 1"))
+        tab("All").performClick()
+        waitForText("drake result 1")
+        assertTrue(exists("drake Official"))
     }
 
     @Test

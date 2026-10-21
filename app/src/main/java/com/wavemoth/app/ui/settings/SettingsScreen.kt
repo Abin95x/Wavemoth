@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
@@ -52,6 +53,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val app = WavemothApp.instance
     val stopOnSwipe by app.settings.stopOnSwipe.collectAsState()
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     var cacheBytes by remember { mutableLongStateOf(-1L) }
     var downloadBytes by remember { mutableLongStateOf(-1L) }
@@ -115,6 +117,11 @@ fun SettingsScreen(onBack: () -> Unit) {
         InfoRow("Version", BuildConfig.VERSION_NAME)
         InfoRow("Music", "Streams from YouTube Music")
         InfoRow("Lyrics", "Provided by LRCLIB (lrclib.net)")
+        InfoRow(
+            title = "Buy me a coffee",
+            subtitle = "Wavemoth is free. If you enjoy it, you can support it here",
+            onClick = { runCatching { uriHandler.openUri(BUY_ME_A_COFFEE_URL) } },
+        )
     }
 
     ConfirmDialog(
@@ -174,6 +181,8 @@ private fun InfoRow(title: String, subtitle: String, onClick: (() -> Unit)? = nu
     }
     HorizontalDivider(color = WavemothColors.Hairline, modifier = Modifier.padding(horizontal = 20.dp))
 }
+
+private const val BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/abin95x"
 
 private fun formatSize(bytes: Long): String = when {
     bytes >= 1024L * 1024 * 1024 -> "%.1f GB".format(bytes / (1024.0 * 1024 * 1024))

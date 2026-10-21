@@ -20,7 +20,7 @@ A music player for Android that streams from YouTube Music. No account, no ads, 
 ## Features
 
 **Listening**
-- Search songs, artists, albums and playlists, or browse by genre and mood
+- Search songs, artists, albums and playlists, or browse by genre and mood. The **All** tab shows the top results of each kind together
 - Plays in the background and on the lock screen, with media notification controls
 - Best audio quality available (Opus up to 160 kbps), cached as it plays
 - Queue, shuffle and repeat; play next / add to queue from any song
@@ -35,6 +35,7 @@ A music player for Android that streams from YouTube Music. No account, no ads, 
 
 **Library**
 - Liked Songs, Downloads, recently played, and your own playlists (create, rename, delete)
+- Show the library as a list or a grid of covers
 - Import a playlist from a `.csv` file (title, artist). Each row is matched on YouTube Music
 - Export a playlist as `.csv`
 - Back up and restore your whole library as a JSON file
@@ -42,6 +43,7 @@ A music player for Android that streams from YouTube Music. No account, no ads, 
 **Settings**
 - Stop music when the app is swiped away from Recents (on by default)
 - Clear the song and artwork cache. Your library and downloads are kept
+- Buy me a coffee link under About
 
 ## Download
 

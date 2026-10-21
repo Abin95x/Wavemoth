@@ -70,6 +70,7 @@ import com.wavemoth.app.ui.components.RecentCover
 import com.wavemoth.app.ui.components.SongRow
 import com.wavemoth.app.ui.components.rememberFileSaver
 import com.wavemoth.app.ui.components.safeFileName
+import com.wavemoth.app.ui.search.SearchFilter
 import com.wavemoth.app.ui.search.SearchViewModel
 import com.wavemoth.app.ui.search.SongResults
 import com.wavemoth.app.ui.theme.WavemothColors
@@ -239,7 +240,7 @@ fun PlaylistScreen(playlistId: String, onBack: () -> Unit) {
 /** Genre / "show all" page, filled from a search. */
 @Composable
 fun CategoryScreen(title: String, query: String, onBack: () -> Unit) {
-    val vm: SearchViewModel = viewModel(key = "category:$query") { SearchViewModel(query) }
+    val vm: SearchViewModel = viewModel(key = "category:$query") { SearchViewModel(query, SearchFilter.Songs) }
     val state by vm.state.collectAsState()
     val actions = LocalSongActions.current
     Box(Modifier.fillMaxSize()) {
