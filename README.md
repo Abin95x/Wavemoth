@@ -2,6 +2,8 @@
 
 A music player for Android that streams from YouTube Music. No account, no ads, no sign-in. Your library lives on your phone.
 
+<a href="https://buymeacoffee.com/abin95x"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee" /></a>
+
 <p align="center">
   <img src="docs/screenshots/wavemoth-home.png" width="19%" alt="Home" />
   <img src="docs/screenshots/wavemoth-search.png" width="19%" alt="Search" />
@@ -101,6 +103,10 @@ Unit and UI tests run on your computer with Robolectric, so no phone is needed. 
 | UI (Jetpack Compose, Material 3), black and red theme | `ui/`, `ui/theme/Theme.kt` |
 
 Paths are under `app/src/main/java/com/wavemoth/app/`.
+
+## Support
+
+Wavemoth is free. If you enjoy it, you can [buy me a coffee](https://buymeacoffee.com/abin95x) ☕
 
 ## Disclaimer
 
