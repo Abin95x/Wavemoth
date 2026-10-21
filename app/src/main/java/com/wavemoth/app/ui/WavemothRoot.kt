@@ -1,19 +1,38 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.wavemoth.app.ui
 
 import android.net.Uri
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.sp
+import com.wavemoth.app.ui.collection.DownloadsScreen
+import com.wavemoth.app.ui.components.LocalDownloadStatus
+import com.wavemoth.app.ui.components.Motion
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -28,9 +47,6 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -49,14 +65,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -93,11 +106,11 @@ private val tabRoutes = setOf("home", "search", "library")
 private val tabs = listOf(
     Tab("home", "Home", Icons.Outlined.Home, Icons.Filled.Home),
     Tab("search", "Search", Icons.Outlined.Search, Icons.Filled.Search),
-    Tab("library", "Your Library", Icons.Outlined.LibraryMusic, Icons.Filled.LibraryMusic),
+    Tab("library", "Library", Icons.Outlined.LibraryMusic, Icons.Filled.LibraryMusic),
 )
 
-private fun NavHostController.openCategory(title: String, query: String, color: Color = Color(0xFF3A3A3A)) =
-    navigate("category?title=${Uri.encode(title)}&query=${Uri.encode(query)}&color=${color.toArgb().toLong() and 0xFFFFFFFFL}")
+private fun NavHostController.openCategory(title: String, query: String) =
+    navigate("category?title=${Uri.encode(title)}&query=${Uri.encode(query)}")
 
 /** Opens a tab at its main page, closing any pages opened on top of the current one. */
 private fun NavHostController.navigateToTab(route: String) = navigate(route) {
@@ -123,6 +136,9 @@ fun WavemothRoot(player: PlayerControls) {
     val playlists by library.playlists.collectAsState()
     val currentId by rememberUpdatedState(state.current?.id)
     val likedIds = remember(liked) { liked.mapTo(HashSet()) { it.id } }
+    val isPlaying by rememberUpdatedState(state.isPlaying)
+    val downloads = WavemothApp.instance.downloads
+    val downloadStatus = downloads.status.collectAsState()
 
     var showPlayer by rememberSaveable { mutableStateOf(false) }
     var options by remember { mutableStateOf<OptionsTarget?>(null) }
@@ -135,6 +151,7 @@ fun WavemothRoot(player: PlayerControls) {
             play = { songs, index, source -> player.play(songs, index, source) },
             showOptions = { song, playlistId -> options = OptionsTarget(song, playlistId) },
             currentSongId = { currentId },
+            isPlaying = { isPlaying },
         )
     }
 
@@ -148,17 +165,17 @@ fun WavemothRoot(player: PlayerControls) {
 
     val overlays = remember { OverlayHost() }
 
-    CompositionLocalProvider(LocalSongActions provides actions, LocalOverlayHost provides overlays) {
+    CompositionLocalProvider(LocalSongActions provides actions, LocalOverlayHost provides overlays, LocalDownloadStatus provides downloadStatus) {
         Box(Modifier.fillMaxSize().background(WavemothColors.Background)) {
             Scaffold(
                 containerColor = WavemothColors.Background,
                 snackbarHost = { SnackbarHost(snackbar) },
                 bottomBar = {
-                    Column(Modifier.background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.95f))))) {
+                    Column(Modifier.background(WavemothColors.Background)) {
                         AnimatedVisibility(
                             visible = state.current != null,
-                            enter = expandVertically(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
-                            exit = shrinkVertically() + fadeOut(),
+                            enter = expandVertically(tween(Motion.SLOW, easing = Motion.Emphasized)) + fadeIn(tween(Motion.MEDIUM)),
+                            exit = shrinkVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) + fadeOut(tween(Motion.FAST)),
                         ) {
                             // Position is collected here so its updates only touch the mini player.
                             val progress by player.progress.collectAsState()
@@ -169,7 +186,7 @@ fun WavemothRoot(player: PlayerControls) {
                                 onToggleLike = { state.current?.let(library::toggleLike) },
                                 onTogglePlay = player::togglePlay,
                                 onNext = player::next,
-                                onPrevious = player::previous,
+                                onPrevious = player::skipToPrevious,
                                 onOpen = { showPlayer = true },
                             )
                         }
@@ -181,21 +198,22 @@ fun WavemothRoot(player: PlayerControls) {
                     nav,
                     startDestination = "home",
                     modifier = Modifier.padding(padding),
-                    // Tabs cross-fade; opening a page slides it in slightly from the right.
+                    // Tabs cross-fade; a new page rises in slightly and settles, and sinks back when closed.
                     enterTransition = {
-                        if (targetState.destination.route in tabRoutes) fadeIn(tween(220))
-                        else fadeIn(tween(260)) + slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { it / 8 }
+                        if (targetState.destination.route in tabRoutes) fadeIn(tween(Motion.MEDIUM))
+                        else fadeIn(tween(Motion.MEDIUM)) + slideInVertically(tween(Motion.SLOW, easing = Motion.Emphasized)) { it / 14 }
                     },
-                    exitTransition = { fadeOut(tween(180)) },
-                    popEnterTransition = { fadeIn(tween(220)) },
+                    exitTransition = { fadeOut(tween(Motion.FAST)) },
+                    popEnterTransition = { fadeIn(tween(Motion.MEDIUM)) },
                     popExitTransition = {
-                        if (initialState.destination.route in tabRoutes) fadeOut(tween(180))
-                        else fadeOut(tween(200)) + slideOutHorizontally(tween(260, easing = FastOutSlowInEasing)) { it / 8 }
+                        if (initialState.destination.route in tabRoutes) fadeOut(tween(Motion.FAST))
+                        else fadeOut(tween(Motion.MEDIUM)) + slideOutVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it / 14 }
                     },
                 ) {
                     composable("home") {
                         HomeScreen(
                             onOpenLiked = { nav.navigate("liked") },
+                            onOpenDownloads = { nav.navigate("downloads") },
                             onOpenPlaylist = { nav.navigate("playlist/$it") },
                             onOpenSearch = { nav.navigateToTab("search") },
                             onOpenSettings = { nav.navigate("settings") },
@@ -225,7 +243,7 @@ fun WavemothRoot(player: PlayerControls) {
                     composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
                     composable("search") {
                         SearchScreen(
-                            onOpenCategory = { nav.openCategory(it.title, it.query, it.color) },
+                            onOpenCategory = { nav.openCategory(it.title, it.query) },
                             onOpenArtist = { nav.openArtist(it.name, it.thumbnail) },
                             onOpenPlaylist = { nav.openRemotePlaylist(it.url, it.name) },
                         )
@@ -234,27 +252,27 @@ fun WavemothRoot(player: PlayerControls) {
                         LibraryScreen(
                             onOpenLiked = { nav.navigate("liked") },
                             onOpenRecent = { nav.navigate("recent") },
+                            onOpenDownloads = { nav.navigate("downloads") },
                             onOpenPlaylist = { nav.navigate("playlist/$it") },
                         )
                     }
                     composable("liked") { LikedScreen(onBack = { nav.popBackStack() }) }
                     composable("recent") { RecentScreen(onBack = { nav.popBackStack() }) }
+                    composable("downloads") { DownloadsScreen(onBack = { nav.popBackStack() }) }
                     composable("playlist/{id}") { entry ->
                         PlaylistScreen(entry.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() })
                     }
                     composable(
-                        "category?title={title}&query={query}&color={color}",
+                        "category?title={title}&query={query}",
                         arguments = listOf(
                             navArgument("title") { defaultValue = "" },
                             navArgument("query") { defaultValue = "" },
-                            navArgument("color") { type = NavType.LongType; defaultValue = 0xFF3A3A3AL },
                         ),
                     ) { entry ->
                         val args = entry.arguments
                         CategoryScreen(
                             title = args?.getString("title").orEmpty(),
                             query = args?.getString("query").orEmpty(),
-                            colorArgb = args?.getLong("color") ?: 0xFF3A3A3AL,
                             onBack = { nav.popBackStack() },
                         )
                     }
@@ -263,9 +281,8 @@ fun WavemothRoot(player: PlayerControls) {
 
             AnimatedVisibility(
                 visible = showPlayer && state.current != null,
-                enter = slideInVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)) { it } +
-                    fadeIn(tween(200)),
-                exit = slideOutVertically(tween(280, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(280)),
+                enter = slideInVertically(tween(Motion.SLOW, easing = Motion.Emphasized)) { it } + fadeIn(tween(Motion.MEDIUM)),
+                exit = slideOutVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeOut(tween(Motion.MEDIUM)),
             ) {
                 BackHandler { showPlayer = false }
                 val progress by player.progress.collectAsState()
@@ -275,6 +292,7 @@ fun WavemothRoot(player: PlayerControls) {
                     player = player,
                     liked = state.current?.id in likedIds,
                     onToggleLike = { state.current?.let(library::toggleLike) },
+                    onDownload = { state.current?.let { downloads.download(listOf(it)) } },
                     onMore = { state.current?.let { options = OptionsTarget(it, null) } },
                     onClose = { showPlayer = false },
                 )
@@ -301,6 +319,8 @@ fun WavemothRoot(player: PlayerControls) {
                 }
             },
             onRemoveFromPlaylist = { target?.let { t -> t.playlistId?.let { library.removeFromPlaylist(it, t.song.id) } } },
+            onDownload = { target?.let { downloads.download(listOf(it.song)) } },
+            onRemoveDownload = { target?.let { downloads.remove(it.song.id) } },
         )
 
         AddToPlaylistDialog(
@@ -329,27 +349,49 @@ fun WavemothRoot(player: PlayerControls) {
     }
 }
 
+/** Three tabs on black. A short red line slides to the selected one. */
 @Composable
 private fun BottomBar(nav: NavHostController) {
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
-    NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp) {
-        tabs.forEach { tab ->
-            val selected = route == tab.route
-            NavigationBarItem(
-                selected = selected,
-                onClick = { nav.navigateToTab(tab.route) },
-                icon = { Icon(if (selected) tab.selectedIcon else tab.icon, tab.label) },
-                label = { Text(tab.label) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color.White,
-                    selectedTextColor = Color.White,
-                    unselectedIconColor = WavemothColors.TextSecondary,
-                    unselectedTextColor = WavemothColors.TextSecondary,
-                    indicatorColor = Color.Transparent,
-                ),
-            )
+    val selected = tabs.indexOfFirst { it.route == route }
+    // Keep the line under the last tab while a page is open on top of it.
+    var lastSelected by remember { mutableIntStateOf(0) }
+    if (selected >= 0) lastSelected = selected
+    val position by animateFloatAsState(lastSelected.toFloat(), tween(Motion.SLOW, easing = Motion.Emphasized), label = "tabLine")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                drawLine(WavemothColors.Hairline, Offset.Zero, Offset(size.width, 0f), 1.dp.toPx())
+                val cell = size.width / tabs.size
+                val line = 20.dp.toPx()
+                val x = cell * position + (cell - line) / 2
+                drawLine(WavemothColors.Red, Offset(x, 1.dp.toPx()), Offset(x + line, 1.dp.toPx()), 2.dp.toPx())
+            }
+            .navigationBarsPadding()
+            .height(60.dp),
+    ) {
+        tabs.forEachIndexed { i, tab ->
+            val active = i == lastSelected
+            val tint by animateColorAsState(if (active) WavemothColors.TextPrimary else WavemothColors.TextTertiary, tween(Motion.MEDIUM), label = "tabTint")
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .selectable(
+                        selected = active,
+                        role = Role.Tab,
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { nav.navigateToTab(tab.route) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(if (active) tab.selectedIcon else tab.icon, null, tint = tint, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.height(3.dp))
+                Text(tab.label, style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.4.sp), color = tint)
+            }
         }
     }
 }
-

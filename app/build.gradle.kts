@@ -81,7 +81,6 @@ dependencies {
     implementation("androidx.media3:media3-datasource-okhttp:$media3")
 
     implementation("io.coil-kt:coil-compose:2.7.0")
-    implementation("androidx.palette:palette-ktx:1.0.0")
     // Installs the bundled Compose baseline profiles so UI code is precompiled (smoother scrolling).
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

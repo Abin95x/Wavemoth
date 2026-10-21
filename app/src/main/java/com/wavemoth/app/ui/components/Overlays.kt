@@ -4,8 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,6 +12,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -69,6 +68,9 @@ class OverlayHost {
     }
 }
 
+private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+private val DialogShape = RoundedCornerShape(18.dp)
+
 val LocalOverlayHost = staticCompositionLocalOf<OverlayHost> { error("OverlayHost not provided") }
 
 /**
@@ -82,7 +84,7 @@ private fun AnimatedOverlay(visible: Boolean, onDismiss: () -> Unit, content: @C
     if (!state.currentState && !state.targetState && state.isIdle) return
     LocalOverlayHost.current.Register {
         val scrim = remember { Animatable(0f) }
-        LaunchedEffect(visible) { scrim.animateTo(if (visible) 0.6f else 0f, tween(200)) }
+        LaunchedEffect(visible) { scrim.animateTo(if (visible) 0.72f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized)) }
         Box(
             Modifier
                 .fillMaxSize()
@@ -102,15 +104,16 @@ fun SheetOverlay(visible: Boolean, onDismiss: () -> Unit, content: @Composable C
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) {
             AnimatedVisibility(
                 state,
-                enter = slideInVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)) { it },
-                exit = slideOutVertically(tween(220)) { it },
+                enter = slideInVertically(tween(Motion.SLOW, easing = Motion.Emphasized)) { it } + fadeIn(tween(Motion.FAST)),
+                exit = slideOutVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeOut(tween(Motion.MEDIUM)),
             ) {
                 Column(
                     Modifier
                         .fillMaxWidth()
                         .heightIn(max = 640.dp)
-                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                        .background(WavemothColors.Elevated)
+                        .clip(SheetShape)
+                        .background(WavemothColors.Surface)
+                        .border(1.dp, WavemothColors.Hairline, SheetShape)
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}  // don't close when tapping the sheet
                         .navigationBarsPadding()
                         .padding(top = 8.dp),
@@ -118,8 +121,8 @@ fun SheetOverlay(visible: Boolean, onDismiss: () -> Unit, content: @Composable C
                     // Drag handle look.
                     Box(
                         Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp)
-                            .size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp))
-                            .background(Color.White.copy(alpha = 0.3f)),
+                            .size(width = 32.dp, height = 3.dp).clip(RoundedCornerShape(2.dp))
+                            .background(WavemothColors.TextTertiary),
                     )
                     content()
                 }
@@ -135,17 +138,18 @@ fun DialogOverlay(visible: Boolean, onDismiss: () -> Unit, content: @Composable 
         Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(24.dp), contentAlignment = Alignment.Center) {
             AnimatedVisibility(
                 state,
-                enter = fadeIn(tween(180)) + scaleIn(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow), initialScale = 0.9f),
-                exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.95f),
+                enter = fadeIn(tween(Motion.MEDIUM)) + scaleIn(tween(Motion.SLOW, easing = Motion.Emphasized), initialScale = 0.94f),
+                exit = fadeOut(tween(Motion.FAST)) + scaleOut(tween(Motion.FAST), targetScale = 0.97f),
             ) {
                 Column(
                     Modifier
                         .widthIn(max = 420.dp)
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(WavemothColors.Elevated)
+                        .clip(DialogShape)
+                        .background(WavemothColors.Surface)
+                        .border(1.dp, WavemothColors.Hairline, DialogShape)
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-                        .padding(20.dp),
+                        .padding(22.dp),
                     content = content,
                 )
             }

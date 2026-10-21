@@ -3,10 +3,11 @@
 A music player for Android that streams from YouTube Music. No account, no ads, no sign-in. Your library lives on your phone.
 
 <p align="center">
-  <img src="docs/screenshots/home.png" width="22%" alt="Home" />
-  <img src="docs/screenshots/search.png" width="22%" alt="Search" />
-  <img src="docs/screenshots/playlist.png" width="22%" alt="Playlist" />
-  <img src="docs/screenshots/settings.png" width="22%" alt="Settings" />
+  <img src="docs/screenshots/home.png" width="19%" alt="Home" />
+  <img src="docs/screenshots/search.png" width="19%" alt="Search" />
+  <img src="docs/screenshots/library.png" width="19%" alt="Library" />
+  <img src="docs/screenshots/playlist.png" width="19%" alt="Playlist" />
+  <img src="docs/screenshots/settings.png" width="19%" alt="Settings" />
 </p>
 
 ## Features
@@ -16,19 +17,24 @@ A music player for Android that streams from YouTube Music. No account, no ads, 
 - Plays in the background and on the lock screen, with media notification controls
 - Best audio quality available (Opus up to 160 kbps), cached as it plays
 - Queue, shuffle and repeat; play next / add to queue from any song
-- Mini player: tap to open the full player, swipe left or right to skip songs
+- Mini player: tap to open the full player, swipe left or right to skip songs (the next song follows your finger in). The cover in the full player swipes the same way
 - Time-synced lyrics from [LRCLIB](https://lrclib.net). Tap a line to jump to it
 - Autoplay radio when the queue ends. It picks related songs and weighs in the artists you like and play, songs you skipped, and what you played recently
 
+**Downloads**
+- Download any playlist, album or Liked Songs with one tap, or your whole library from Library → ⋮ → Download all songs
+- Downloaded songs play without internet. Downloads keep going in the background with a progress notification and resume after a restart
+- Remove one song from its ⋮ menu, or all downloads from the Downloads page or Settings
+
 **Library**
-- Liked Songs, recently played, and your own playlists (create, rename, delete)
+- Liked Songs, Downloads, recently played, and your own playlists (create, rename, delete)
 - Import a playlist from a `.csv` file (title, artist). Each row is matched on YouTube Music
 - Export a playlist as `.csv`
 - Back up and restore your whole library as a JSON file
 
 **Settings**
 - Stop music when the app is swiped away from Recents (on by default)
-- Clear the song and artwork cache. Your library is kept
+- Clear the song and artwork cache. Your library and downloads are kept
 
 ## Download
 
@@ -80,16 +86,16 @@ Unit and UI tests run on your computer with Robolectric, so no phone is needed. 
 |---|---|
 | Catalogue and stream URLs ([NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)) | `data/YouTubeSource.kt` |
 | Playback service and media session ([Media3](https://developer.android.com/media/media3)) | `playback/PlaybackService.kt` |
+| Where audio comes from: downloads, then the playback cache, then the network | `playback/AudioSources.kt` |
+| Offline downloads (Media3 DownloadManager) | `download/Downloads.kt`, `download/DownloadsService.kt` |
 | Audio fetched in short ranged requests, so YouTube doesn't throttle it | `playback/ChunkedDataSource.kt` |
 | Autoplay radio scoring | `data/Radio.kt`, `data/SkipHistory.kt` |
 | Lyrics (LRCLIB + LRC parser) | `data/Lyrics.kt` |
 | Library, playlists, backup | `data/LibraryRepository.kt` |
 | CSV import / export | `data/PlaylistFile.kt`, `data/PlaylistImporter.kt` |
-| UI (Jetpack Compose, Material 3) | `ui/` |
+| UI (Jetpack Compose, Material 3), black and red theme | `ui/`, `ui/theme/Theme.kt` |
 
 Paths are under `app/src/main/java/com/wavemoth/app/`.
-
-On first launch, the app adds a starter playlist from `app/src/main/assets/my-playlist.csv`.
 
 ## Disclaimer
 

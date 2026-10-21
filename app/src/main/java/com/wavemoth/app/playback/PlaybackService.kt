@@ -8,11 +8,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.DataSpec
-import androidx.media3.datasource.ResolvingDataSource
-import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -33,7 +28,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.IOException
 
 /** Owns the player so music keeps going with the app in the background or the screen off. */
 @UnstableApi
@@ -46,24 +40,13 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         val app = application as WavemothApp
 
-        // Data path: disk cache (keyed by song id) → resolve id to a stream URL → chunked HTTP.
-        // The cache sits first so a cached song plays without even looking up its URL.
-        val http = OkHttpDataSource.Factory(app.okHttp)
-        val chunked = DataSource.Factory { ChunkedDataSource(http.createDataSource()) }
-        val resolving = ResolvingDataSource.Factory(chunked, ::resolve)
-        val cached = CacheDataSource.Factory()
-            .setCache(app.audioCache)
-            .setUpstreamDataSourceFactory(resolving)
-            .setCacheKeyFactory { spec -> spec.key ?: spec.uri.toString() }
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-
         // Audio is small: start after 1s of buffer instead of the default 2.5s.
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(15_000, 60_000, 1_000, 2_000)
             .build()
 
         val player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(cached))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(AudioSources.forPlayback(app)))
             .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -85,21 +68,6 @@ class PlaybackService : MediaSessionService() {
         session = MediaSession.Builder(this, player)
             .setSessionActivity(openApp)
             .setCallback(SessionCallback)
-            .build()
-    }
-
-    /** Swap `wavemoth://song/<id>` for the real audio URL. Runs on the loader thread. */
-    private fun resolve(spec: DataSpec): DataSpec {
-        if (spec.uri.scheme != SONG_SCHEME) return spec
-        val id = spec.uri.lastPathSegment ?: throw IOException("Bad song URI ${spec.uri}")
-        val audio = try {
-            YouTubeSource.resolveAudio(id)
-        } catch (e: Exception) {
-            throw IOException("Couldn't load this song", e)
-        }
-        return spec.buildUpon()
-            .setUri(audio.url)
-            .setHttpRequestHeaders(spec.httpRequestHeaders + audio.headers)
             .build()
     }
 

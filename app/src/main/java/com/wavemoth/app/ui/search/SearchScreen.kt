@@ -1,6 +1,25 @@
 package com.wavemoth.app.ui.search
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.border
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import com.wavemoth.app.ui.components.Motion
+import com.wavemoth.app.ui.components.SectionLabel
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,7 +56,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
@@ -50,7 +68,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wavemoth.app.data.Song
 import com.wavemoth.app.data.Catalog
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -75,27 +92,27 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.Page
 
-data class Category(val title: String, val query: String, val color: Color)
+data class Category(val title: String, val query: String)
 
 val browseCategories = listOf(
-    Category("Pop", "pop hits", Color(0xFF8D67AB)),
-    Category("Hip-Hop", "hip hop hits", Color(0xFFBA5D07)),
-    Category("Rock", "rock classics", Color(0xFFE91429)),
-    Category("Chill", "chill songs", Color(0xFF477D95)),
-    Category("Workout", "workout songs", Color(0xFF777777)),
-    Category("Focus", "focus music instrumental", Color(0xFF503750)),
-    Category("Party", "party songs", Color(0xFFAF2896)),
-    Category("Love", "romantic songs", Color(0xFFDC148C)),
-    Category("Indie", "indie songs", Color(0xFF608108)),
-    Category("Electronic", "electronic dance music", Color(0xFF0D73EC)),
-    Category("Jazz", "jazz classics", Color(0xFF1E3264)),
-    Category("Classical", "classical music", Color(0xFF7D4B32)),
-    Category("K-Pop", "kpop hits", Color(0xFFE8115B)),
-    Category("Latin", "latin hits", Color(0xFFE1118C)),
-    Category("Bollywood", "bollywood hits", Color(0xFFD84000)),
-    Category("Malayalam", "malayalam hit songs", Color(0xFF148A08)),
-    Category("Tamil", "tamil hit songs", Color(0xFF8C1932)),
-    Category("Sleep", "sleep music", Color(0xFF1E3264)),
+    Category("Pop", "pop hits"),
+    Category("Hip-Hop", "hip hop hits"),
+    Category("Rock", "rock classics"),
+    Category("Chill", "chill songs"),
+    Category("Workout", "workout songs"),
+    Category("Focus", "focus music instrumental"),
+    Category("Party", "party songs"),
+    Category("Love", "romantic songs"),
+    Category("Indie", "indie songs"),
+    Category("Electronic", "electronic dance music"),
+    Category("Jazz", "jazz classics"),
+    Category("Classical", "classical music"),
+    Category("K-Pop", "kpop hits"),
+    Category("Latin", "latin hits"),
+    Category("Bollywood", "bollywood hits"),
+    Category("Malayalam", "malayalam hit songs"),
+    Category("Tamil", "tamil hit songs"),
+    Category("Sleep", "sleep music"),
 )
 
 enum class SearchFilter(val label: String) { Songs("Songs"), Artists("Artists"), Albums("Albums"), Playlists("Playlists") }
@@ -187,52 +204,72 @@ fun SearchScreen(
     val focus = LocalFocusManager.current
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Text("Search", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(16.dp))
+        Text("Search", style = MaterialTheme.typography.headlineMedium, color = WavemothColors.TextPrimary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 16.dp))
         SearchBar(state.query, vm::onQueryChange, onSubmit = { focus.clearFocus() })
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
 
-        if (state.query.isBlank()) {
-            BrowseGrid(onOpenCategory)
-        } else {
-            FilterChips(state.filter, vm::onFilterChange)
-            when (state.filter) {
-                SearchFilter.Songs -> SongResults(state, "Search", onLoadMore = vm::loadMore, onRetry = vm::retry)
-                SearchFilter.Artists -> ResultList(state, vm::retry, state.artists, { it.url }) { artist ->
-                    ResultRow(
-                        title = artist.name,
-                        subtitle = "Artist" + if (artist.subscribers > 0) " • ${compactCount(artist.subscribers)} followers" else "",
-                        image = artist.thumbnail,
-                        round = true,
-                        onClick = { onOpenArtist(artist) },
-                    )
-                }
-                SearchFilter.Albums, SearchFilter.Playlists -> ResultList(state, vm::retry, state.playlists, { it.url }) { p ->
-                    ResultRow(
-                        title = p.name,
-                        subtitle = (if (p.isAlbum) "Album" else "Playlist") + if (p.owner.isNotBlank()) " • ${p.owner}" else "",
-                        image = p.thumbnail,
-                        round = false,
-                        onClick = { onOpenPlaylist(p) },
-                    )
+        AnimatedContent(
+            targetState = state.query.isBlank(),
+            transitionSpec = { fadeIn(tween(Motion.MEDIUM)) togetherWith fadeOut(tween(Motion.FAST)) },
+            label = "searchBody",
+        ) { blank ->
+            if (blank) {
+                BrowseGrid(onOpenCategory)
+            } else Column {
+                FilterTabs(state.filter, vm::onFilterChange)
+                when (state.filter) {
+                    SearchFilter.Songs -> SongResults(state, "Search", onLoadMore = vm::loadMore, onRetry = vm::retry)
+                    SearchFilter.Artists -> ResultList(state, vm::retry, state.artists, { it.url }) { artist ->
+                        ResultRow(
+                            title = artist.name,
+                            subtitle = "Artist" + if (artist.subscribers > 0) " · ${compactCount(artist.subscribers)} followers" else "",
+                            image = artist.thumbnail,
+                            round = true,
+                            onClick = { onOpenArtist(artist) },
+                        )
+                    }
+                    SearchFilter.Albums, SearchFilter.Playlists -> ResultList(state, vm::retry, state.playlists, { it.url }) { p ->
+                        ResultRow(
+                            title = p.name,
+                            subtitle = (if (p.isAlbum) "Album" else "Playlist") + if (p.owner.isNotBlank()) " · ${p.owner}" else "",
+                            image = p.thumbnail,
+                            round = false,
+                            onClick = { onOpenPlaylist(p) },
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+/** Text tabs with a red line under the selected one that slides between them. */
 @Composable
-private fun FilterChips(selected: SearchFilter, onSelect: (SearchFilter) -> Unit) {
-    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(SearchFilter.entries) { f ->
+private fun FilterTabs(selected: SearchFilter, onSelect: (SearchFilter) -> Unit) {
+    val bounds = remember { mutableStateMapOf<SearchFilter, Pair<Float, Float>>() }
+    val target = bounds[selected]
+    val left by animateFloatAsState(target?.first ?: 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "tabLeft")
+    val width by animateFloatAsState(target?.second ?: 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "tabWidth")
+    Row(
+        Modifier
+            .padding(horizontal = 12.dp)
+            .fillMaxWidth()
+            .drawBehind {
+                val y = size.height - 1.dp.toPx()
+                drawLine(WavemothColors.Hairline, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                if (width > 0f) drawLine(WavemothColors.Red, Offset(left, y), Offset(left + width, y), 2.dp.toPx())
+            },
+    ) {
+        SearchFilter.entries.forEach { f ->
             val active = f == selected
+            val color by animateColorAsState(if (active) WavemothColors.TextPrimary else WavemothColors.TextSecondary, tween(Motion.MEDIUM), label = "tabColor")
             Box(
                 Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (active) WavemothColors.Green else WavemothColors.Elevated)
+                    .onGloballyPositioned { bounds[f] = it.positionInParent().x to it.size.width.toFloat() }
                     .selectable(selected = active, role = Role.Tab) { onSelect(f) }
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                    .padding(horizontal = 10.dp, vertical = 12.dp),
             ) {
-                Text(f.label, style = MaterialTheme.typography.titleSmall, color = if (active) Color.Black else Color.White)
+                Text(f.label, style = MaterialTheme.typography.titleSmall, color = color)
             }
         }
     }
@@ -244,14 +281,9 @@ private fun <T> ResultList(state: SearchState, onRetry: () -> Unit, items: List<
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         when {
             state.loading -> item { CenteredSpinner() }
-            state.error != null -> item {
-                Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(state.error, color = WavemothColors.TextSecondary)
-                    TextButton(onClick = onRetry) { Text("Try again", color = WavemothColors.Green) }
-                }
-            }
+            state.error != null -> item { ErrorMessage(state.error, onRetry) }
             items.isEmpty() -> item {
-                Text("No ${state.filter.label.lowercase()} found for \"${state.query}\"", color = WavemothColors.TextSecondary, modifier = Modifier.padding(16.dp))
+                Text("No ${state.filter.label.lowercase()} found for \"${state.query}\"", color = WavemothColors.TextSecondary, modifier = Modifier.padding(20.dp))
             }
             else -> items(items, key = key) { row(it) }
         }
@@ -261,13 +293,13 @@ private fun <T> ResultList(state: SearchState, onRetry: () -> Unit, items: List<
 @Composable
 private fun ResultRow(title: String, subtitle: String, image: String, round: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Artwork(image.ifBlank { null }, Modifier.size(56.dp), if (round) CircleShape else RoundedCornerShape(4.dp))
-        Spacer(Modifier.width(12.dp))
+        Artwork(image.ifBlank { null }, Modifier.size(52.dp), if (round) CircleShape else RoundedCornerShape(8.dp))
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = WavemothColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = WavemothColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -285,40 +317,44 @@ private fun trimZero(v: Double): String = if (v >= 100 || v % 1.0 < 0.05) "%.0f"
 
 @Composable
 private fun SearchBar(query: String, onChange: (String) -> Unit, onSubmit: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val border by animateColorAsState(if (focused) WavemothColors.Red else WavemothColors.Hairline, tween(Motion.MEDIUM), label = "searchBorder")
+    val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(48.dp).clip(RoundedCornerShape(6.dp)).background(Color.White),
+        Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(50.dp)
+            .clip(shape).background(WavemothColors.Surface).border(1.dp, border, shape),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.Search, null, tint = Color(0xFF121212), modifier = Modifier.padding(horizontal = 12.dp))
+        Icon(Icons.Filled.Search, null, tint = if (focused) WavemothColors.Red else WavemothColors.TextSecondary, modifier = Modifier.padding(horizontal = 14.dp).size(22.dp))
         Box(Modifier.weight(1f)) {
             if (query.isEmpty()) {
-                Text("What do you want to listen to?", color = Color(0xFF535353), style = MaterialTheme.typography.bodyLarge)
+                Text("Songs, artists, albums", color = WavemothColors.TextTertiary, style = MaterialTheme.typography.bodyLarge)
             }
             BasicTextField(
                 value = query,
                 onValueChange = onChange,
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color(0xFF121212)),
-                cursorBrush = SolidColor(Color(0xFF121212)),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = WavemothColors.TextPrimary),
+                cursorBrush = SolidColor(WavemothColors.Red),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
             )
         }
         if (query.isNotEmpty()) {
-            IconButton(onClick = { onChange("") }) { Icon(Icons.Filled.Close, "Clear", tint = Color(0xFF121212)) }
+            IconButton(onClick = { onChange("") }) { Icon(Icons.Filled.Close, "Clear", tint = WavemothColors.TextSecondary) }
         }
     }
 }
 
 @Composable
 private fun BrowseGrid(onOpenCategory: (Category) -> Unit) {
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Browse all", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp)) }
-        browseCategories.chunked(2).forEach { pair ->
-            item(key = pair.first().title) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    pair.forEach { CategoryTile(it, Modifier.weight(1f)) { onOpenCategory(it) } }
+    LazyColumn(contentPadding = PaddingValues(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { SectionLabel("Browse", Modifier.padding(bottom = 0.dp)) }
+        browseCategories.withIndex().chunked(2).forEach { pair ->
+            item(key = pair.first().value.title) {
+                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    pair.forEach { (i, c) -> CategoryTile(i, c, Modifier.weight(1f)) { onOpenCategory(c) } }
                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
@@ -327,14 +363,17 @@ private fun BrowseGrid(onOpenCategory: (Category) -> Unit) {
 }
 
 @Composable
-private fun CategoryTile(category: Category, modifier: Modifier, onClick: () -> Unit) {
-    Box(modifier.height(100.dp).pressClick(onClick = onClick).clip(RoundedCornerShape(6.dp)).background(category.color)) {
-        Text(category.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(12.dp))
-        // Tilted accent block in the corner.
-        Box(
-            Modifier.align(Alignment.BottomEnd).offset(x = 18.dp, y = 8.dp).size(64.dp).rotate(25f)
-                .clip(RoundedCornerShape(4.dp)).background(Color.Black.copy(alpha = 0.25f)),
-        )
+private fun CategoryTile(index: Int, category: Category, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier.height(60.dp).pressClick(onClick = onClick)
+            .clip(shape).background(WavemothColors.Surface).border(1.dp, WavemothColors.Hairline, shape)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("%02d".format(index + 1), style = MaterialTheme.typography.labelMedium, color = WavemothColors.Red)
+        Spacer(Modifier.width(12.dp))
+        Text(category.title, style = MaterialTheme.typography.titleMedium, color = WavemothColors.TextPrimary, maxLines = 1)
     }
 }
 
@@ -359,14 +398,9 @@ fun SongResults(
         header?.let { item { it() } }
         when {
             state.loading -> item { CenteredSpinner() }
-            state.error != null -> item {
-                Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(state.error, color = WavemothColors.TextSecondary)
-                    TextButton(onClick = onRetry) { Text("Try again", color = WavemothColors.Green) }
-                }
-            }
+            state.error != null -> item { ErrorMessage(state.error, onRetry) }
             state.songs.isEmpty() && state.query.isNotBlank() -> item {
-                Text("No songs found for \"${state.query}\"", color = WavemothColors.TextSecondary, modifier = Modifier.padding(16.dp))
+                Text("No songs found for \"${state.query}\"", color = WavemothColors.TextSecondary, modifier = Modifier.padding(20.dp))
             }
         }
         itemsIndexed(state.songs, key = { _, s -> s.id }) { i, song ->
@@ -384,7 +418,15 @@ fun SongResults(
 @Composable
 private fun CenteredSpinner(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = WavemothColors.Green, modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
+        CircularProgressIndicator(color = WavemothColors.Red, modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+    }
+}
+
+@Composable
+private fun ErrorMessage(message: String, onRetry: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(message, color = WavemothColors.TextSecondary)
+        TextButton(onClick = onRetry) { Text("Try again", color = WavemothColors.Red) }
     }
 }
 
