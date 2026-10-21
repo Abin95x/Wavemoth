@@ -87,4 +87,12 @@ On first launch, the app adds a starter playlist from `app/src/main/assets/my-pl
 
 ## Disclaimer
 
-Wavemoth is a personal project and is not affiliated with YouTube or Google. It uses NewPipeExtractor, which is licensed under GPL-3.0. Streaming content may be subject to YouTube's Terms of Service. Use it at your own risk.
+Wavemoth is a personal project and is not affiliated with YouTube or Google. Streaming content may be subject to YouTube's Terms of Service. Use it at your own risk.
+
+## License
+
+Copyright (C) 2026 Abin
+
+Wavemoth is free software, licensed under the [GNU General Public License v3.0](LICENSE). You can use, change and share it. If you share a changed version, it must also be GPL-3.0 and include its source code.
+
+It uses [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor), which is also GPL-3.0.
