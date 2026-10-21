@@ -32,11 +32,17 @@ A music player for Android that streams from YouTube Music. No account, no ads, 
 
 ## Download
 
-**[⬇ Download Wavemoth.apk](release/Wavemoth.apk?raw=1)** (Android 8.0 or newer)
+**[⬇ Download Wavemoth.apk](https://github.com/Abin95x/Wavemoth/raw/main/release/Wavemoth.apk)** (Android 8.0 or newer)
 
 1. Open the link on your phone and download the APK.
 2. Open the file. If Android asks, allow installs from your browser or file manager.
 3. Tap **Install**.
+
+Or install it from a computer, with USB debugging turned on in your phone's developer options:
+
+```bash
+adb install -r release/Wavemoth.apk
+```
 
 The APK is signed with a debug key, so Play Protect may warn about an unknown developer. Tap **Install anyway** to continue. To update, install the new APK over the old one. Your library is kept.
 
