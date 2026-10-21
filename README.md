@@ -3,11 +3,11 @@
 A music player for Android that streams from YouTube Music. No account, no ads, no sign-in. Your library lives on your phone.
 
 <p align="center">
-  <img src="docs/screenshots/home.png" width="19%" alt="Home" />
-  <img src="docs/screenshots/search.png" width="19%" alt="Search" />
-  <img src="docs/screenshots/library.png" width="19%" alt="Library" />
-  <img src="docs/screenshots/playlist.png" width="19%" alt="Playlist" />
-  <img src="docs/screenshots/settings.png" width="19%" alt="Settings" />
+  <img src="docs/screenshots/wavemoth-home.png" width="19%" alt="Home" />
+  <img src="docs/screenshots/wavemoth-search.png" width="19%" alt="Search" />
+  <img src="docs/screenshots/wavemoth-library.png" width="19%" alt="Library" />
+  <img src="docs/screenshots/wavemoth-playlist.png" width="19%" alt="Playlist" />
+  <img src="docs/screenshots/wavemoth-settings.png" width="19%" alt="Settings" />
 </p>
 
 ## Features
