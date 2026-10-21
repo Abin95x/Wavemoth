@@ -38,7 +38,10 @@ import androidx.media3.common.util.UnstableApi
 import coil.imageLoader
 import com.wavemoth.app.BuildConfig
 import com.wavemoth.app.WavemothApp
+import com.wavemoth.app.ui.components.ConfirmDialog
+import com.wavemoth.app.ui.components.SectionLabel
 import com.wavemoth.app.ui.theme.WavemothColors
+import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,6 +54,9 @@ fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var cacheBytes by remember { mutableLongStateOf(-1L) }
+    var downloadBytes by remember { mutableLongStateOf(-1L) }
+    val downloaded by app.downloads.songs.collectAsState()
+    var confirmRemove by remember { mutableStateOf(false) }
 
     suspend fun measureCache() {
         cacheBytes = withContext(Dispatchers.IO) {
@@ -58,12 +64,13 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
     }
     LaunchedEffect(Unit) { measureCache() }
+    LaunchedEffect(downloaded.size) { downloadBytes = withContext(Dispatchers.IO) { app.downloadCache.cacheSpace } }
 
     Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState())) {
         Row(Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-            Text("Settings", style = MaterialTheme.typography.titleLarge)
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = WavemothColors.TextPrimary) }
         }
+        Text("Settings", style = MaterialTheme.typography.headlineMedium, color = WavemothColors.TextPrimary, modifier = Modifier.padding(start = 20.dp, bottom = 4.dp))
 
         SectionHeader("Playback")
         SwitchRow(
@@ -73,6 +80,17 @@ fun SettingsScreen(onBack: () -> Unit) {
             onChange = app.settings::setStopOnSwipe,
         )
         InfoRow("Audio quality", "Highest available: Opus 160 kbps")
+
+        SectionHeader("Downloads")
+        InfoRow(
+            title = "Downloaded songs",
+            subtitle = if (downloadBytes < 0) "Calculating…" else "${downloaded.size} songs · ${formatSize(downloadBytes)}",
+        )
+        InfoRow(
+            title = "Remove all downloads",
+            subtitle = "Songs stay in your library and stream again",
+            onClick = if (downloaded.isEmpty()) null else ({ confirmRemove = true }),
+        )
 
         SectionHeader("Storage")
         InfoRow(
@@ -98,15 +116,20 @@ fun SettingsScreen(onBack: () -> Unit) {
         InfoRow("Music", "Streams from YouTube Music")
         InfoRow("Lyrics", "Provided by LRCLIB (lrclib.net)")
     }
+
+    ConfirmDialog(
+        visible = confirmRemove,
+        title = "Remove all downloads?",
+        message = "Songs stay in your library and will stream again.",
+        confirmLabel = "Remove",
+        onDismiss = { confirmRemove = false },
+        onConfirm = app.downloads::removeAll,
+    )
 }
 
 @Composable
 private fun SectionHeader(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 4.dp),
-    )
+    SectionLabel(text, Modifier.padding(bottom = 0.dp))
 }
 
 @Composable
@@ -115,11 +138,11 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
         Modifier
             .fillMaxWidth()
             .clickable(role = Role.Switch) { onChange(!checked) }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = WavemothColors.TextPrimary)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = WavemothColors.TextSecondary)
         }
         Spacer(Modifier.width(12.dp))
@@ -128,7 +151,11 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
             onCheckedChange = null,  // the whole row toggles
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = WavemothColors.Green,
+                checkedTrackColor = WavemothColors.RedDeep,
+                checkedBorderColor = WavemothColors.RedDeep,
+                uncheckedThumbColor = WavemothColors.TextSecondary,
+                uncheckedTrackColor = WavemothColors.Background,
+                uncheckedBorderColor = WavemothColors.Hairline,
             ),
         )
     }
@@ -140,12 +167,12 @@ private fun InfoRow(title: String, subtitle: String, onClick: (() -> Unit)? = nu
         Modifier
             .fillMaxWidth()
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
-        Text(title, style = MaterialTheme.typography.bodyLarge)
+        Text(title, style = MaterialTheme.typography.bodyLarge, color = WavemothColors.TextPrimary)
         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = WavemothColors.TextSecondary)
     }
-    HorizontalDivider(color = WavemothColors.Divider.copy(alpha = 0.4f), modifier = Modifier.padding(horizontal = 16.dp))
+    HorizontalDivider(color = WavemothColors.Hairline, modifier = Modifier.padding(horizontal = 20.dp))
 }
 
 private fun formatSize(bytes: Long): String = when {

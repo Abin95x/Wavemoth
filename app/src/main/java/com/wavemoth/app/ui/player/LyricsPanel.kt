@@ -40,7 +40,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
+import com.wavemoth.app.ui.components.Motion
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -86,31 +89,28 @@ fun rememberLyrics(song: Song, attempt: Int = 0): LyricsState {
 fun LyricsPanel(
     song: Song,
     progress: PlaybackProgress,
-    background: Color,
     onSeek: (Long) -> Unit,
     onClose: () -> Unit,
 ) {
     var attempt by remember { mutableIntStateOf(0) }
     val state = rememberLyrics(song, attempt)
-    val panelColor = lerp(background, Color.Black, 0.15f)
-
-    Column(Modifier.fillMaxSize().background(panelColor).statusBarsPadding().navigationBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(WavemothColors.Background).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.Filled.KeyboardArrowDown, "Close lyrics", modifier = Modifier.size(32.dp)) }
+            IconButton(onClick = onClose) { Icon(Icons.Filled.KeyboardArrowDown, "Close lyrics", tint = WavemothColors.TextPrimary, modifier = Modifier.size(30.dp)) }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 MarqueeText(song.title, MaterialTheme.typography.titleSmall, Color.White)
-                MarqueeText(song.artist, MaterialTheme.typography.bodySmall, Color.White.copy(alpha = 0.7f))
+                MarqueeText(song.artist, MaterialTheme.typography.bodySmall, WavemothColors.TextSecondary)
             }
             Box(Modifier.size(48.dp))
         }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (state) {
-                LyricsState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+                LyricsState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(28.dp), color = WavemothColors.Red, strokeWidth = 2.dp)
                 LyricsState.NotFound -> Message("No lyrics found for this song")
                 LyricsState.Failed -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Message("Couldn't load lyrics. Check your connection.")
-                    TextButton(onClick = { attempt++ }) { Text("Try again", color = Color.White) }
+                    TextButton(onClick = { attempt++ }) { Text("Try again", color = WavemothColors.Red) }
                 }
                 is LyricsState.Found -> when {
                     state.lyrics.synced.isNotEmpty() -> SyncedLyrics(state.lyrics.synced, progress, onSeek)
@@ -123,7 +123,7 @@ fun LyricsPanel(
         Text(
             "Lyrics from LRCLIB",
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.6f),
+            color = WavemothColors.TextTertiary,
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             textAlign = TextAlign.Center,
         )
@@ -154,20 +154,23 @@ private fun SyncedLyrics(lines: List<LyricLine>, progress: PlaybackProgress, onS
         itemsIndexed(lines) { i, line ->
             val color by animateColorAsState(
                 when {
-                    i == current -> Color.White
-                    i < current -> Color.White.copy(alpha = 0.55f)
-                    else -> Color.Black.copy(alpha = 0.55f)
+                    i == current -> WavemothColors.TextPrimary
+                    i < current -> WavemothColors.TextTertiary
+                    else -> WavemothColors.TextSecondary.copy(alpha = 0.55f)
                 },
-                tween(250),
+                tween(Motion.SLOW),
                 label = "lyricColor",
             )
+            val scale by animateFloatAsState(if (i == current) 1f else 0.94f, tween(Motion.SLOW, easing = Motion.Emphasized), label = "lyricScale")
             Text(
                 line.text.ifBlank { "♪" },
                 color = color,
                 fontSize = 24.sp,
                 lineHeight = 30.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth().clickable { onSeek(line.timeMs) },
+                modifier = Modifier.fillMaxWidth()
+                    .graphicsLayer { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(0f, 0.5f) }
+                    .clickable { onSeek(line.timeMs) },
             )
         }
     }
@@ -177,7 +180,7 @@ private fun SyncedLyrics(lines: List<LyricLine>, progress: PlaybackProgress, onS
 private fun PlainLyrics(text: String) {
     Text(
         text,
-        color = Color.White,
+        color = WavemothColors.TextPrimary,
         fontSize = 20.sp,
         lineHeight = 28.sp,
         fontWeight = FontWeight.Bold,

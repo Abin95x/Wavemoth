@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -11,11 +12,11 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.wavemoth.app.data.LibraryRepository
 import com.wavemoth.app.data.LrcLib
-import com.wavemoth.app.data.PlaylistFile
 import com.wavemoth.app.data.PlaylistImporter
 import com.wavemoth.app.data.Settings
 import com.wavemoth.app.data.SkipHistory
 import com.wavemoth.app.data.YouTubeSource
+import com.wavemoth.app.download.Downloads
 import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -40,33 +41,39 @@ class WavemothApp : Application(), ImageLoaderFactory {
 
     val skips: SkipHistory by lazy { SkipHistory(this) }
 
+    val databaseProvider: StandaloneDatabaseProvider by lazy { StandaloneDatabaseProvider(this) }
+
     /** Recently played audio is kept on disk so replays and seeks don't hit the network. One per process. */
     val audioCache: SimpleCache by lazy {
-        SimpleCache(
-            File(cacheDir, "audio"),
-            LeastRecentlyUsedCacheEvictor(300L * 1024 * 1024),
-            StandaloneDatabaseProvider(this),
-        )
+        SimpleCache(File(cacheDir, "audio"), LeastRecentlyUsedCacheEvictor(300L * 1024 * 1024), databaseProvider)
     }
+
+    /** Downloaded songs. Never evicted, and not touched by "Clear cache". */
+    val downloadCache: SimpleCache by lazy {
+        SimpleCache(File(filesDir, "downloads"), NoOpCacheEvictor(), databaseProvider)
+    }
+
+    val downloads: Downloads by lazy { Downloads(this) }
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         YouTubeSource.init(okHttp)
         LrcLib.client = okHttp
-        addStarterPlaylistOnce()
+        removeStarterPlaylistOnce()
     }
 
-    /** On first launch, add the playlist bundled in assets/my-playlist.csv (songs already matched). */
-    private fun addStarterPlaylistOnce() {
+    /**
+     * Older versions added a starter playlist on first launch. Remove it once, but only if it is
+     * still exactly as it was added (same name, same 60 songs in the same order).
+     */
+    private fun removeStarterPlaylistOnce() {
         val prefs = getSharedPreferences("app", MODE_PRIVATE)
-        if (prefs.getBoolean("starter_playlist_added", false)) return
-        prefs.edit().putBoolean("starter_playlist_added", true).apply()
-        Thread {
-            val csv = runCatching { assets.open("my-playlist.csv").bufferedReader().use { it.readText() } }.getOrNull() ?: return@Thread
-            val songs = PlaylistFile.parse(csv).mapNotNull { it.toSongOrNull() }
-            if (songs.isNotEmpty()) library.importPlaylist("My Playlist", songs)
-        }.start()
+        if (!prefs.getBoolean("starter_playlist_added", false) || prefs.getBoolean("starter_playlist_removed", false)) return
+        prefs.edit().putBoolean("starter_playlist_removed", true).apply()
+        library.playlists.value
+            .filter { it.name == "My Playlist" && it.songs.size == 60 && it.songs.first().id == "Rbgw_rduQpM" }
+            .forEach { library.deletePlaylist(it.id) }
     }
 
     /** Shared image loader: memory + disk cache, and a short fade so covers don't pop in. */

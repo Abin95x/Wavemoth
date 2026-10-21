@@ -1,5 +1,5 @@
 <resources>
-    <color name="background">#FF121212</color>
-    <color name="icon_background">#FF121212</color>
-    <color name="icon_accent">#FF1ED760</color>
+    <color name="background">#FF000000</color>
+    <color name="icon_background">#FF000000</color>
+    <color name="icon_accent">#FFFF3344</color>
 </resources>

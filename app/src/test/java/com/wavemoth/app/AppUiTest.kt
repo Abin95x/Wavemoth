@@ -9,7 +9,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.hasScrollToKeyAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -20,7 +20,8 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollToKey
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
@@ -101,12 +102,15 @@ class AppUiTest {
 
     // ---------------------------------------------------------------- helpers
 
+    /** A playlist like one a user would have: 60 songs, the sixth one called "YSL". */
+    private val mySongs = (1..60).map { song(100 + it, title = if (it == 6) "YSL" else "Mine $it", artist = "Artist ${it % 7}") }
+
     private fun launch(state: PlayerUiState? = null) {
-        state?.let { player.state.value = it }
+        state?.let { player.state.value = FakePlayer.withNeighbours(it) }
+        if (library.playlists.value.none { it.name == "My Playlist" }) library.importPlaylist("My Playlist", mySongs)
         rule.setContent { WavemothTheme { WavemothRoot(player) } }
         // Drive time by hand: a blinking text cursor inside a dialog never lets Robolectric go idle.
         rule.mainClock.autoAdvance = false
-        rule.waitUntil(5_000) { settle(100); library.playlists.value.isNotEmpty() }  // starter playlist added on first launch
         settle()
     }
 
@@ -148,26 +152,26 @@ class AppUiTest {
     @Test
     fun tabsSettingsAndHome() {
         launch()
-        assertTrue(exists("Good", substring = true))
-        assertTrue(exists("Your playlists"))
+        assertTrue(exists("wavemoth", substring = true))
+        assertTrue(exists("PLAYLISTS"))
 
         tab("Search").performClick(); settle()
-        assertTrue(exists("Browse all"))
-        tab("Your Library").performClick(); settle()
+        assertTrue(exists("BROWSE"))
+        tab("Library").performClick(); settle()
         assertTrue(exists("Import playlist file"))
         tab("Home").performClick(); settle()
-        assertTrue(exists("Your playlists"))
+        assertTrue(exists("PLAYLISTS"))
 
         // Switching tabs opens the tab's main page, not the page left open there.
-        tab("Your Library").performClick(); settle()
+        tab("Library").performClick(); settle()
         rule.onAllNodesWithText("My Playlist").onFirst().performClick(); settle()
         assertFalse(exists("Import playlist file"))
         tab("Home").performClick(); settle()
-        tab("Your Library").performClick(); settle()
+        tab("Library").performClick(); settle()
         assertTrue(exists("Import playlist file"))
         // Tapping the open tab also goes back to its main page.
         rule.onAllNodesWithText("My Playlist").onFirst().performClick(); settle()
-        tab("Your Library").performClick(); settle()
+        tab("Library").performClick(); settle()
         assertTrue(exists("Import playlist file"))
         tab("Home").performClick(); settle()
 
@@ -181,30 +185,53 @@ class AppUiTest {
         click("Clear cache")
         waitForText("of saved songs", substring = true)
         clickDesc("Back")
-        assertTrue(exists("Your playlists"))
+        assertTrue(exists("PLAYLISTS"))
     }
 
     @Test
-    fun starterPlaylistAndPlayButtons() {
+    fun noStarterPlaylistAndPlayButtons() {
+        // A fresh install starts with an empty library.
+        assertTrue(library.playlists.value.isEmpty())
         launch()
         val mine = library.playlists.value.single()
-        assertEquals("My Playlist", mine.name)
         assertEquals(60, mine.songs.size)
 
         rule.onAllNodesWithText("My Playlist").onFirst().performClick(); settle()
         assertTrue(exists("60 songs", substring = true))
 
-        clickDesc("Play")
+        click("Play")
         assertEquals(0, player.lastPlay!!.second)
         assertEquals(60, player.lastPlay!!.first.size)
         assertEquals("My Playlist", player.lastPlay!!.third)
 
-        clickDesc("Shuffle play")
-        assertEquals(mine.songs.map { it.id }.toSet(), player.lastPlay!!.first.map { it.id }.toSet())
-
-        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("YSL"))
+        rule.onNode(hasScrollToKeyAction()).performScrollToKey(mySongs[5].id); settle()
         click("YSL")
         assertEquals(5, player.lastPlay!!.second)
+
+        rule.onNode(hasScrollToKeyAction()).performScrollToIndex(0); settle()
+        click("Shuffle")
+        assertEquals(mine.songs.map { it.id }.toSet(), player.lastPlay!!.first.map { it.id }.toSet())
+    }
+
+    @Test
+    fun downloadButtonsStartDownloads() {
+        launch()
+        app.downloads.manager.pauseDownloads()  // queue only; nothing touches the network in tests
+        rule.onAllNodesWithText("My Playlist").onFirst().performClick(); settle()
+        clickDesc("Download all")
+        // Every song is queued at once, and the download service is started to keep it going.
+        rule.waitUntil(5_000) { settle(100); app.downloads.status.value.size == 60 }
+        assertTrue(rule.onAllNodesWithContentDescription("Downloading", substring = true).fetchSemanticsNodes().isNotEmpty())
+        val started = generateSequence { shadowOf(app).nextStartedService }.toList()
+        assertTrue(started.any { it.component?.className == "com.wavemoth.app.download.DownloadsService" })
+
+        clickDesc("Back")
+        tab("Library").performClick(); settle()
+        click("Downloads")
+        assertTrue(exists("On this phone".uppercase()))
+        clickDesc("More"); click("Remove all downloads")
+        click("Remove")
+        rule.waitUntil(5_000) { settle(100); app.downloads.status.value.isEmpty() }
     }
 
     @Test
@@ -237,15 +264,15 @@ class AppUiTest {
         val next = library.playlists.value.first { it.name == "My Playlist" }.songs.first()
         openOptions(); click("Go to artist")
         val artist = next.artist.split(',').first().trim()
-        waitForText("Popular")
-        clickDesc("Play")
+        waitForText("POPULAR")
+        click("Play")
         assertEquals(artist, player.lastPlay!!.third)
     }
 
     @Test
     fun createRenameExportDeletePlaylists() {
         launch()
-        tab("Your Library").performClick(); settle()
+        tab("Library").performClick(); settle()
 
         clickDesc("Create playlist")
         rule.onNode(hasSetTextAction()).performTextInput("Gym")
@@ -280,7 +307,7 @@ class AppUiTest {
     @Test
     fun importBackupAndRestore() {
         launch()
-        tab("Your Library").performClick(); settle()
+        tab("Library").performClick(); settle()
 
         val csv = tmp.newFile("party.csv").apply {
             writeText("title,artist,album,youtube_id\nFirst Song,Band A,,vid00000001\nSecond Song,Band B,,vid00000002\nThird Song,Band C,,\n")
@@ -316,14 +343,28 @@ class AppUiTest {
         assertTrue(library.liked.value.any { it.id == songs[0].id })
 
         // Swipe the mini player: left for next, right for previous. Neither opens the full player.
-        rule.onNodeWithText("Alpha Track").performTouchInput { swipeLeft() }; settle()
+        // The mini player is one clickable card, so aim at the title itself. The clock runs during
+        // the swipe so the gesture sees every move (nothing here animates forever).
+        fun swipe(text: String, left: Boolean) {
+            rule.mainClock.autoAdvance = true
+            rule.onNodeWithText(text, useUnmergedTree = true).performTouchInput { if (left) swipeLeft(endX = this.left - width) else swipeRight(endX = right + width) }
+            rule.waitForIdle()
+            rule.mainClock.autoAdvance = false
+            settle(1_000)
+        }
+        swipe("Alpha Track", left = true)
         assertEquals(1, player.calls.count { it == "next" })
-        rule.onNodeWithText("Alpha Track").performTouchInput { swipeRight() }; settle()
-        assertEquals(1, player.calls.count { it == "previous" })
-        assertFalse(exists("PLAYING FROM"))
+        assertTrue(exists("Beta Track"))
+        swipe("Beta Track", left = false)
+        assertEquals(1, player.calls.count { it == "skipToPrevious" })
+        assertTrue(exists("Alpha Track"))
+        // Nothing before the first song: a swipe right springs back.
+        swipe("Alpha Track", left = false)
+        assertEquals(1, player.calls.count { it == "skipToPrevious" })
+        assertFalse(exists("NOW PLAYING"))
 
         click("Alpha Track")  // open the full player
-        assertTrue(exists("PLAYING FROM"))
+        assertTrue(exists("NOW PLAYING"))
         assertTrue(exists("Test Mix"))
 
         clickDesc("Next"); clickDesc("Previous"); clickDesc("Shuffle"); clickDesc("Repeat")
@@ -345,7 +386,7 @@ class AppUiTest {
         assertTrue("addToQueue:${songs[0].id}" in player.calls)
 
         clickDesc("Close player")
-        assertFalse(exists("PLAYING FROM"))
+        assertFalse(exists("NOW PLAYING"))
 
         click("Alpha Track")
         clickDesc("Queue")
@@ -367,13 +408,13 @@ class AppUiTest {
         tab("Artists").performClick()
         waitForText("1.5M followers", substring = true)
         click("drake Official")
-        waitForText("Popular")
-        assertTrue(exists("Albums"))
+        waitForText("POPULAR")
+        assertTrue(exists("ALBUMS"))
         click("Album drake Official")
         waitForText("Remote song 1")
-        clickDesc("Save to Your Library")
+        clickDesc("Save to Library")
         rule.waitUntil(5_000) { settle(100); library.playlists.value.any { it.name == "Remote List" && it.songs.size == 4 } }
-        clickDesc("Play")
+        click("Play")
         assertEquals("Remote List", player.lastPlay!!.third)
         clickDesc("Back"); clickDesc("Back")
 
@@ -387,11 +428,11 @@ class AppUiTest {
         waitForText("Album drake")
 
         clickDesc("Clear")
-        assertTrue(exists("Browse all"))
+        assertTrue(exists("BROWSE"))
         click("Pop")
         waitForText("pop hits result 1")
         clickDesc("Back")
-        assertTrue(exists("Browse all"))
+        assertTrue(exists("BROWSE"))
     }
 
     @Test
@@ -401,7 +442,7 @@ class AppUiTest {
         library.addRecent(song(2, "Recent One"))
         settle()
 
-        tab("Your Library").performClick(); settle()
+        tab("Library").performClick(); settle()
         rule.onAllNodesWithText("Liked Songs").onFirst().performClick(); settle()
         click("Liked One")
         assertEquals("Liked Songs", player.lastPlay!!.third)

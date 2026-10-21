@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -31,6 +32,9 @@ data class PlayerUiState(
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val queue: List<Song> = emptyList(),
     val queueIndex: Int = 0,
+    /** The songs a swipe would go to (shuffle and repeat taken into account). */
+    val previousSong: Song? = null,
+    val nextSong: Song? = null,
     val source: String = "",
     val error: String? = null,
 )
@@ -47,7 +51,7 @@ data class PlaybackProgress(
     val sampledAt: Long = SystemClock.elapsedRealtime(),
 ) {
     fun positionAt(now: Long): Long {
-        val p = if (playing) positionMs + (now - sampledAt) else positionMs
+        val p = if (playing) positionMs + (now - sampledAt).coerceAtLeast(0) else positionMs
         return if (durationMs > 0) p.coerceIn(0, durationMs) else p.coerceAtLeast(0)
     }
 }
@@ -63,7 +67,10 @@ interface PlayerControls {
     fun addToQueue(song: Song)
     fun togglePlay()
     fun next()
+    /** Previous button: restarts the song if it's a few seconds in, else goes back one. */
     fun previous()
+    /** Always goes to the previous song (swipe). */
+    fun skipToPrevious()
     fun skipTo(index: Int)
     fun seekTo(ms: Long)
     fun toggleShuffle()
@@ -130,6 +137,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app), PlayerControls 
                 repeatMode = c.repeatMode,
                 queue = if (rebuildQueue) (0 until c.mediaItemCount).map { i -> c.getMediaItemAt(i).toSong() } else it.queue,
                 queueIndex = c.currentMediaItemIndex,
+                previousSong = c.previousMediaItemIndex.takeIf { i -> i != C.INDEX_UNSET }?.let { i -> c.getMediaItemAt(i).toSong() },
+                nextSong = c.nextMediaItemIndex.takeIf { i -> i != C.INDEX_UNSET }?.let { i -> c.getMediaItemAt(i).toSong() },
             )
         }
     }
@@ -170,6 +179,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app), PlayerControls 
 
     override fun next() = withController { seekToNext() }
     override fun previous() = withController { seekToPrevious() }
+    override fun skipToPrevious() = withController { seekToPreviousMediaItem() }
     override fun skipTo(index: Int) = withController { seekToDefaultPosition(index); play() }
 
     override fun seekTo(ms: Long) {
