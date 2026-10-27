@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SaveAlt
@@ -58,6 +59,7 @@ import com.wavemoth.app.data.Song
 import com.wavemoth.app.data.formatDuration
 import com.wavemoth.app.download.DownloadStatus
 import com.wavemoth.app.ui.components.Artwork
+import com.wavemoth.app.ui.components.CSV_TYPES
 import com.wavemoth.app.ui.components.ConfirmDialog
 import com.wavemoth.app.ui.components.DownloadAllButton
 import com.wavemoth.app.ui.components.DownloadsCover
@@ -68,18 +70,23 @@ import com.wavemoth.app.ui.components.NameDialog
 import com.wavemoth.app.ui.components.PillButton
 import com.wavemoth.app.ui.components.RecentCover
 import com.wavemoth.app.ui.components.SongRow
+import com.wavemoth.app.ui.components.rememberFileOpener
 import com.wavemoth.app.ui.components.rememberFileSaver
 import com.wavemoth.app.ui.components.safeFileName
+import com.wavemoth.app.ui.library.ImportStatusRow
 import com.wavemoth.app.ui.search.SearchFilter
 import com.wavemoth.app.ui.search.SearchViewModel
 import com.wavemoth.app.ui.search.SongResults
 import com.wavemoth.app.ui.theme.WavemothColors
 
-/** Liked Songs. */
+/** Liked Songs, with export to and import from a playlist file. */
 @Composable
-fun LikedScreen(onBack: () -> Unit) {
-    val songs by WavemothApp.instance.library.liked.collectAsState()
+fun LikedScreen(onBack: () -> Unit, onOpenPlaylist: (String) -> Unit) {
+    val app = WavemothApp.instance
+    val songs by app.library.liked.collectAsState()
+    val importStatus by app.importer.status.collectAsState()
     val saveFile = rememberFileSaver("text/csv")
+    val pickFile = rememberFileOpener { name, text -> app.importer.import(name, text.orEmpty(), intoLiked = true) }
     SongCollection(
         title = "Liked Songs",
         label = "Collection",
@@ -94,6 +101,15 @@ fun LikedScreen(onBack: () -> Unit) {
                 enabled = songs.isNotEmpty(),
                 onClick = { close(); saveFile("Liked Songs.csv") { PlaylistFile.fromSongs(songs) } },
             )
+            DropdownMenuItem(
+                text = { Text("Import from file") },
+                leadingIcon = { Icon(Icons.Filled.FileOpen, null) },
+                enabled = importStatus?.finished != false,
+                onClick = { close(); pickFile(CSV_TYPES) },
+            )
+        },
+        extra = {
+            importStatus?.let { status -> item(key = "import-status") { ImportStatusRow(status, onOpenPlaylist, app.importer::dismiss) } }
         },
     )
 }

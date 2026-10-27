@@ -46,6 +46,18 @@ class LibraryRepository(private val file: File) {
         save()
     }
 
+    /** Likes imported songs; ones already liked are left where they are. Returns how many were new. */
+    fun addLiked(songs: List<Song>): Int {
+        var added = emptyList<Song>()
+        _liked.update { cur ->
+            added = songs.distinctBy { it.id }.filterNot { s -> cur.any { it.id == s.id } }
+            added + cur
+        }
+        added.forEach { onLiked?.invoke(it.id) }
+        save()
+        return added.size
+    }
+
     /** Creates a playlist from imported songs. */
     fun importPlaylist(name: String, songs: List<Song>): Playlist {
         val playlist = Playlist(UUID.randomUUID().toString(), name.trim().ifBlank { "Imported playlist" }, songs, System.currentTimeMillis())

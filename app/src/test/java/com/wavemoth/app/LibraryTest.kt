@@ -121,4 +121,26 @@ class LibraryTest {
         assertTrue(importer.status.value?.error != null)
         assertEquals(1, lib.playlists.value.size)  // no empty playlist was created
     }
+
+    @Test
+    fun importerCanAddToLikedSongs() {
+        Catalog.search = { YouTubeSource.SearchPage(emptyList(), null) }
+        val lib = LibraryRepository(file)
+        lib.toggleLike(song(9))
+        val importer = PlaylistImporter(lib)
+        val csv = """
+            title,artist,album,youtube_id
+            First Song,Band A,,vid00000001
+            Again,Band A,,${song(9).id}
+        """.trimIndent()
+        importer.import("Favourites", csv, intoLiked = true)
+        repeat(200) { if (importer.status.value?.finished == true) return@repeat; Thread.sleep(20) }
+
+        val status = importer.status.value!!
+        assertTrue(status.finished)
+        assertTrue(status.intoLiked)
+        assertEquals(null, status.playlistId)
+        assertTrue(lib.playlists.value.isEmpty())  // no playlist created
+        assertEquals(listOf("vid00000001", song(9).id), lib.liked.value.map { it.id })  // no duplicate
+    }
 }

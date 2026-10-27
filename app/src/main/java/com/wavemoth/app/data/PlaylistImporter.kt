@@ -23,10 +23,12 @@ data class ImportStatus(
     val finished: Boolean = false,
     val playlistId: String? = null,
     val error: String? = null,
+    /** True when the songs went into Liked Songs instead of a new playlist. */
+    val intoLiked: Boolean = false,
 )
 
 /**
- * Turns a playlist file into a Wavemoth playlist. Rows that already have a YouTube id are added
+ * Turns a playlist file into a Wavemoth playlist (or adds it to Liked Songs). Rows that already have a YouTube id are added
  * directly; the rest are looked up on YouTube Music. Runs app-wide so leaving the screen doesn't stop it.
  */
 class PlaylistImporter(private val library: LibraryRepository) {
@@ -36,32 +38,37 @@ class PlaylistImporter(private val library: LibraryRepository) {
     private val _status = MutableStateFlow<ImportStatus?>(null)
     val status: StateFlow<ImportStatus?> = _status.asStateFlow()
 
-    fun import(name: String, csv: String) {
+    fun import(name: String, csv: String, intoLiked: Boolean = false) {
         if (job?.isActive == true) return
         job = scope.launch {
             val rows = runCatching { PlaylistFile.parse(csv) }.getOrDefault(emptyList())
             if (rows.isEmpty()) {
-                _status.value = ImportStatus(name, 0, 0, 0, finished = true, error = "No songs found in that file. It needs a header row with a \"title\" column.")
+                _status.value = ImportStatus(name, 0, 0, 0, finished = true, error = "No songs found in that file. It needs a header row with a \"title\" column.", intoLiked = intoLiked)
                 return@launch
             }
             val done = AtomicInteger()
             val found = AtomicInteger()
-            _status.value = ImportStatus(name, 0, rows.size, 0)
+            _status.value = ImportStatus(name, 0, rows.size, 0, intoLiked = intoLiked)
             val gate = Semaphore(3)  // a few searches at a time so YouTube doesn't block us
             val songs = rows.map { row ->
                 async {
                     val song = row.toSongOrNull() ?: gate.withPermit { SongMatcher.find(row) }
                     if (song != null) found.incrementAndGet()
-                    _status.value = ImportStatus(name, done.incrementAndGet(), rows.size, found.get())
+                    _status.value = ImportStatus(name, done.incrementAndGet(), rows.size, found.get(), intoLiked = intoLiked)
                     song
                 }
             }.awaitAll().filterNotNull().distinctBy { it.id }
             if (songs.isEmpty()) {
-                _status.value = ImportStatus(name, rows.size, rows.size, 0, finished = true, error = "None of the songs in that file could be found.")
+                _status.value = ImportStatus(name, rows.size, rows.size, 0, finished = true, error = "None of the songs in that file could be found.", intoLiked = intoLiked)
                 return@launch
             }
-            val playlist = library.importPlaylist(name, songs)
-            _status.value = ImportStatus(name, rows.size, rows.size, songs.size, finished = true, playlistId = playlist.id)
+            if (intoLiked) {
+                library.addLiked(songs)
+                _status.value = ImportStatus(name, rows.size, rows.size, songs.size, finished = true, intoLiked = true)
+            } else {
+                val playlist = library.importPlaylist(name, songs)
+                _status.value = ImportStatus(name, rows.size, rows.size, songs.size, finished = true, playlistId = playlist.id)
+            }
         }
     }
 

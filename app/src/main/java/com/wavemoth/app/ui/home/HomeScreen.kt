@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -53,7 +54,10 @@ import com.wavemoth.app.ui.components.SongCard
 import com.wavemoth.app.ui.components.pressClick
 import com.wavemoth.app.ui.theme.WavemothColors
 
-/** Home shows only your own music: shortcuts, what you played recently and your playlists. */
+/** How many recently played songs the Home shelf shows; the full history is in Library. */
+private const val HOME_RECENT_LIMIT = 15
+
+/** Home shows only your own music: shortcuts, what you played recently, suggestions and your playlists. */
 @Composable
 fun HomeScreen(
     onOpenLiked: () -> Unit,
@@ -67,6 +71,8 @@ fun HomeScreen(
     val playlists by app.library.playlists.collectAsState()
     val liked by app.library.liked.collectAsState()
     val downloaded by app.downloads.songs.collectAsState()
+    val suggested by app.suggestions.songs.collectAsState()
+    LaunchedEffect(recent.firstOrNull()?.id) { app.suggestions.refresh() }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -96,7 +102,12 @@ fun HomeScreen(
 
         if (recent.isNotEmpty()) {
             item { SectionLabel("Recently played") }
-            item { SongShelf(recent, "Recently played") }
+            item { SongShelf(recent.take(HOME_RECENT_LIMIT), "Recently played") }
+        }
+
+        if (suggested.isNotEmpty()) {
+            item { SectionLabel("Suggested for you") }
+            item { SongShelf(suggested, "Suggested for you") }
         }
 
         if (playlists.isNotEmpty()) {

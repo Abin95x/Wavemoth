@@ -233,8 +233,9 @@ private fun LibraryTile(entry: Entry, modifier: Modifier = Modifier) {
     }
 }
 
+/** Progress and result of a file import (into a new playlist or into Liked Songs). */
 @Composable
-private fun ImportStatusRow(status: ImportStatus, onOpenPlaylist: (String) -> Unit, onDismiss: () -> Unit) {
+internal fun ImportStatusRow(status: ImportStatus, onOpenPlaylist: (String) -> Unit, onDismiss: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
         when {
             status.error != null -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -243,7 +244,8 @@ private fun ImportStatusRow(status: ImportStatus, onOpenPlaylist: (String) -> Un
             }
             !status.finished -> {
                 Text(
-                    "Importing \"${status.name}\": finding songs ${status.done} of ${status.total}",
+                    (if (status.intoLiked) "Adding to Liked Songs" else "Importing \"${status.name}\"") +
+                        ": finding songs ${status.done} of ${status.total}",
                     style = MaterialTheme.typography.bodySmall,
                     color = WavemothColors.TextSecondary,
                 )
@@ -259,7 +261,8 @@ private fun ImportStatusRow(status: ImportStatus, onOpenPlaylist: (String) -> Un
             else -> Row(verticalAlignment = Alignment.CenterVertically) {
                 val missed = status.total - status.found
                 Text(
-                    "Imported ${status.found} of ${status.total} songs" + if (missed > 0) " ($missed not found)" else "",
+                    (if (status.intoLiked) "Added ${status.found} of ${status.total} songs to Liked Songs" else "Imported ${status.found} of ${status.total} songs") +
+                        if (missed > 0) " ($missed not found)" else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = WavemothColors.TextPrimary,
                     modifier = Modifier.weight(1f),

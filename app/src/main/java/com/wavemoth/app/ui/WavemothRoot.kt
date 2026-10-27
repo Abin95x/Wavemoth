@@ -256,7 +256,7 @@ fun WavemothRoot(player: PlayerControls) {
                             onOpenPlaylist = { nav.navigate("playlist/$it") },
                         )
                     }
-                    composable("liked") { LikedScreen(onBack = { nav.popBackStack() }) }
+                    composable("liked") { LikedScreen(onBack = { nav.popBackStack() }, onOpenPlaylist = { nav.navigate("playlist/$it") }) }
                     composable("recent") { RecentScreen(onBack = { nav.popBackStack() }) }
                     composable("downloads") { DownloadsScreen(onBack = { nav.popBackStack() }) }
                     composable("playlist/{id}") { entry ->
