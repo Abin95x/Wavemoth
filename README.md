@@ -77,6 +77,7 @@ playlists and history live on your phone, not on someone's server.
 
 **Library**
 - Liked Songs, Downloads, recently played, and your own playlists (create, rename, delete)
+- Sort Liked Songs by date added (newest or oldest first), title, artist or duration. Your choice is remembered
 - Show the library as a list or a grid of covers
 - Import a playlist from a `.csv` file. Each row is matched on YouTube Music
 - Import a `.csv` file straight into Liked Songs (Liked Songs → ⋮ → Import from file). Songs you already like aren't added twice

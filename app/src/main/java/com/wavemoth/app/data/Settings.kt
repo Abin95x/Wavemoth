@@ -29,8 +29,19 @@ class Settings(context: Context) {
         _libraryGrid.value = enabled
     }
 
+    private val _likedSort = MutableStateFlow(SongSort.fromName(prefs.getString(KEY_LIKED_SORT, null)))
+
+    /** How Liked Songs is sorted. Recently added by default. */
+    val likedSort: StateFlow<SongSort> = _likedSort.asStateFlow()
+
+    fun setLikedSort(sort: SongSort) {
+        prefs.edit().putString(KEY_LIKED_SORT, sort.name).apply()
+        _likedSort.value = sort
+    }
+
     private companion object {
         const val KEY_STOP_ON_SWIPE = "stop_on_swipe"
         const val KEY_LIBRARY_GRID = "library_grid"
+        const val KEY_LIKED_SORT = "liked_sort"
     }
 }

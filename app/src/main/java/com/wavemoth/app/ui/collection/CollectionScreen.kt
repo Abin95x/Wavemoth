@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
@@ -56,6 +58,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wavemoth.app.WavemothApp
 import com.wavemoth.app.data.PlaylistFile
 import com.wavemoth.app.data.Song
+import com.wavemoth.app.data.SongSort
 import com.wavemoth.app.data.formatDuration
 import com.wavemoth.app.download.DownloadStatus
 import com.wavemoth.app.ui.components.Artwork
@@ -83,7 +86,9 @@ import com.wavemoth.app.ui.theme.WavemothColors
 @Composable
 fun LikedScreen(onBack: () -> Unit, onOpenPlaylist: (String) -> Unit) {
     val app = WavemothApp.instance
-    val songs by app.library.liked.collectAsState()
+    val liked by app.library.liked.collectAsState()
+    val sort by app.settings.likedSort.collectAsState()
+    val songs = remember(liked, sort) { sort.apply(liked) }
     val importStatus by app.importer.status.collectAsState()
     val saveFile = rememberFileSaver("text/csv")
     val pickFile = rememberFileOpener { name, text -> app.importer.import(name, text.orEmpty(), intoLiked = true) }
@@ -94,12 +99,13 @@ fun LikedScreen(onBack: () -> Unit, onOpenPlaylist: (String) -> Unit) {
         cover = { LikedSongsCover(it, RoundedCornerShape(14.dp)) },
         emptyText = "Songs you like will appear here. Tap the heart on any song.",
         onBack = onBack,
+        headerActions = { SortButton(sort, app.settings::setLikedSort) },
         menu = { close ->
             DropdownMenuItem(
                 text = { Text("Export as file") },
                 leadingIcon = { Icon(Icons.Filled.SaveAlt, null) },
                 enabled = songs.isNotEmpty(),
-                onClick = { close(); saveFile("Liked Songs.csv") { PlaylistFile.fromSongs(songs) } },
+                onClick = { close(); saveFile("Liked Songs.csv") { PlaylistFile.fromSongs(liked) } },
             )
             DropdownMenuItem(
                 text = { Text("Import from file") },
@@ -286,6 +292,7 @@ private fun SongCollection(
     onBack: () -> Unit,
     playlistId: String? = null,
     showDownloadButton: Boolean = true,
+    headerActions: @Composable () -> Unit = {},
     menu: (@Composable (close: () -> Unit) -> Unit)? = null,
     extra: (LazyListScope.() -> Unit)? = null,
 ) {
@@ -306,6 +313,7 @@ private fun SongCollection(
                     onShuffle = { actions.play(songs.shuffled(), 0, title) },
                     menu = menu,
                     downloadSongs = if (showDownloadButton) songs else null,
+                    actions = headerActions,
                 )
             }
             extra?.invoke(this)
@@ -323,6 +331,24 @@ private fun SongCollection(
             }
         }
         BackButton(onBack)
+    }
+}
+
+/** Sort button with a menu of [SongSort] options; the current one is ticked. */
+@Composable
+private fun SortButton(current: SongSort, onSelect: (SongSort) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort", tint = WavemothColors.TextSecondary) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = WavemothColors.Elevated) {
+            SongSort.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label, color = if (option == current) WavemothColors.Red else WavemothColors.TextPrimary) },
+                    trailingIcon = { if (option == current) Icon(Icons.Filled.Check, null, tint = WavemothColors.Red) },
+                    onClick = { open = false; onSelect(option) },
+                )
+            }
+        }
     }
 }
 
