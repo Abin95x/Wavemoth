@@ -143,4 +143,13 @@ class LibraryTest {
         assertTrue(lib.playlists.value.isEmpty())  // no playlist created
         assertEquals(listOf("vid00000001", song(9).id), lib.liked.value.map { it.id })  // no duplicate
     }
+
+    @Test
+    fun topArtistsRankLikesAndPlays() {
+        val liked = listOf(song(1, artist = "Band A feat. Singer B"), song(2, artist = "band a"))
+        val recent = listOf(song(3, artist = "Band C - Topic"), song(1, artist = "Band A feat. Singer B"))
+        val top = com.wavemoth.app.data.TopArtists.from(liked, recent)
+        assertEquals(listOf("Band A", "Singer B", "Band C"), top.map { it.name })  // case-insensitive merge, "- Topic" dropped
+        assertEquals(2, com.wavemoth.app.data.TopArtists.from(liked, recent, limit = 2).size)
+    }
 }

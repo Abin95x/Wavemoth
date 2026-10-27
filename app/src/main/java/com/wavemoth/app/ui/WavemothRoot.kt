@@ -217,6 +217,7 @@ fun WavemothRoot(player: PlayerControls) {
                             onOpenPlaylist = { nav.navigate("playlist/$it") },
                             onOpenSearch = { nav.navigateToTab("search") },
                             onOpenSettings = { nav.navigate("settings") },
+                            onOpenArtist = { name, image -> nav.openArtist(name, image) },
                         )
                     }
                     composable(

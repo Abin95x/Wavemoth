@@ -26,7 +26,7 @@ A music player for Android that streams from YouTube Music. No account, no ads, 
 - Queue, shuffle and repeat; play next / add to queue from any song
 - Mini player: tap to open the full player, swipe left or right to skip songs (the next song follows your finger in). The cover in the full player swipes the same way
 - Time-synced lyrics from [LRCLIB](https://lrclib.net). Tap a line to jump to it
-- Home shows your 15 most recently played songs and a short **Suggested for you** row of new songs related to what you play and like
+- Home shows your 15 most recently played songs and the artists you like and play most. Tap an artist to open their page
 - Autoplay radio when the queue ends. It picks related songs and weighs in the artists you like and play, songs you skipped, and what you played recently
 
 **Downloads**
@@ -100,7 +100,8 @@ Unit and UI tests run on your computer with Robolectric, so no phone is needed. 
 | Where audio comes from: downloads, then the playback cache, then the network | `playback/AudioSources.kt` |
 | Offline downloads (Media3 DownloadManager) | `download/Downloads.kt`, `download/DownloadsService.kt` |
 | Audio fetched in short ranged requests, so YouTube doesn't throttle it | `playback/ChunkedDataSource.kt` |
-| Autoplay radio and Home suggestions scoring | `data/Radio.kt`, `data/Suggestions.kt`, `data/SkipHistory.kt` |
+| Autoplay radio scoring | `data/Radio.kt`, `data/SkipHistory.kt` |
+| Your top artists on Home | `data/TopArtists.kt` |
 | Lyrics (LRCLIB + LRC parser) | `data/Lyrics.kt` |
 | Library, playlists, backup | `data/LibraryRepository.kt` |
 | CSV import / export | `data/PlaylistFile.kt`, `data/PlaylistImporter.kt` |

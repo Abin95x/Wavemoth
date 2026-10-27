@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
@@ -32,7 +33,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -41,11 +43,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.wavemoth.app.WavemothApp
 import com.wavemoth.app.data.Playlist
 import com.wavemoth.app.data.Song
+import com.wavemoth.app.data.TopArtist
+import com.wavemoth.app.data.TopArtists
+import com.wavemoth.app.ui.components.Artwork
 import com.wavemoth.app.ui.components.LocalSongActions
 import com.wavemoth.app.ui.components.PillButton
 import com.wavemoth.app.ui.components.PlaylistCover
@@ -53,11 +60,13 @@ import com.wavemoth.app.ui.components.SectionLabel
 import com.wavemoth.app.ui.components.SongCard
 import com.wavemoth.app.ui.components.pressClick
 import com.wavemoth.app.ui.theme.WavemothColors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** How many recently played songs the Home shelf shows; the full history is in Library. */
 private const val HOME_RECENT_LIMIT = 15
 
-/** Home shows only your own music: shortcuts, what you played recently, suggestions and your playlists. */
+/** Home shows only your own music: shortcuts, what you played recently, your top artists and your playlists. */
 @Composable
 fun HomeScreen(
     onOpenLiked: () -> Unit,
@@ -65,14 +74,14 @@ fun HomeScreen(
     onOpenPlaylist: (String) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenArtist: (name: String, image: String) -> Unit,
 ) {
     val app = WavemothApp.instance
     val recent by app.library.recent.collectAsState()
     val playlists by app.library.playlists.collectAsState()
     val liked by app.library.liked.collectAsState()
     val downloaded by app.downloads.songs.collectAsState()
-    val suggested by app.suggestions.songs.collectAsState()
-    LaunchedEffect(recent.firstOrNull()?.id) { app.suggestions.refresh() }
+    val artists = remember(liked, recent) { TopArtists.from(liked, recent) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -105,9 +114,13 @@ fun HomeScreen(
             item { SongShelf(recent.take(HOME_RECENT_LIMIT), "Recently played") }
         }
 
-        if (suggested.isNotEmpty()) {
-            item { SectionLabel("Suggested for you") }
-            item { SongShelf(suggested, "Suggested for you") }
+        if (artists.isNotEmpty()) {
+            item { SectionLabel("Artists") }
+            item {
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    items(artists, key = { it.name.lowercase() }) { a -> ArtistCard(a, onOpenArtist) }
+                }
+            }
         }
 
         if (playlists.isNotEmpty()) {
@@ -153,6 +166,28 @@ private fun SongShelf(songs: List<Song>, source: String) {
         itemsIndexed(songs, key = { _, s -> s.id }) { i, song ->
             SongCard(song, onClick = { actions.play(songs, i, source) })
         }
+    }
+}
+
+/** Round artist photo (looked up on YouTube Music, song cover until then) with the name below. */
+@Composable
+private fun ArtistCard(artist: TopArtist, onOpen: (name: String, image: String) -> Unit) {
+    val photo by produceState<String?>(null, artist.name) { value = withContext(Dispatchers.IO) { TopArtists.photo(artist.name) } }
+    val image = photo ?: artist.cover
+    Column(
+        Modifier.width(96.dp).pressClick(onClick = { onOpen(artist.name, image.orEmpty()) }),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Artwork(image, Modifier.size(96.dp), CircleShape)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            artist.name,
+            style = MaterialTheme.typography.titleSmall,
+            color = WavemothColors.TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

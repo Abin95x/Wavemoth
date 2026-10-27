@@ -15,7 +15,6 @@ import com.wavemoth.app.data.LrcLib
 import com.wavemoth.app.data.PlaylistImporter
 import com.wavemoth.app.data.Settings
 import com.wavemoth.app.data.SkipHistory
-import com.wavemoth.app.data.Suggestions
 import com.wavemoth.app.data.YouTubeSource
 import com.wavemoth.app.download.Downloads
 import okhttp3.OkHttpClient
@@ -37,8 +36,6 @@ class WavemothApp : Application(), ImageLoaderFactory {
     }
 
     val importer: PlaylistImporter by lazy { PlaylistImporter(library) }
-
-    val suggestions: Suggestions by lazy { Suggestions(library, skipped = { skips.all() }) }
 
     val settings: Settings by lazy { Settings(this) }
 

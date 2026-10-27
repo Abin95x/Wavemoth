@@ -1,5 +1,6 @@
 package com.wavemoth.app.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,12 +8,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -117,11 +122,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         InfoRow("Version", BuildConfig.VERSION_NAME)
         InfoRow("Music", "Streams from YouTube Music")
         InfoRow("Lyrics", "Provided by LRCLIB (lrclib.net)")
-        InfoRow(
-            title = "Buy me a coffee",
-            subtitle = "Wavemoth is free. If you enjoy it, you can support it here",
-            onClick = { runCatching { uriHandler.openUri(BUY_ME_A_COFFEE_URL) } },
-        )
+        CoffeeButton { runCatching { uriHandler.openUri(BUY_ME_A_COFFEE_URL) } }
     }
 
     ConfirmDialog(
@@ -181,6 +182,31 @@ private fun InfoRow(title: String, subtitle: String, onClick: (() -> Unit)? = nu
     }
     HorizontalDivider(color = WavemothColors.Hairline, modifier = Modifier.padding(horizontal = 20.dp))
 }
+
+/** Support link, in Buy Me a Coffee's yellow so it stands out from the rest of the page. */
+@Composable
+private fun CoffeeButton(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .clip(shape)
+            .background(CoffeeYellow)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.LocalCafe, null, tint = Color.Black, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(14.dp))
+        Column {
+            Text("Buy me a coffee", style = MaterialTheme.typography.titleMedium, color = Color.Black)
+            Text("Wavemoth is free. If you enjoy it, you can support it here", style = MaterialTheme.typography.bodySmall, color = Color.Black.copy(alpha = 0.7f))
+        }
+    }
+}
+
+private val CoffeeYellow = Color(0xFFFFDD00)
 
 private const val BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/abin95x"
 
