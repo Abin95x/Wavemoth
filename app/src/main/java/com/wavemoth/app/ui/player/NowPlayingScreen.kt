@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -58,6 +59,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -269,9 +271,12 @@ fun NowPlayingScreen(
         }
     }
 
+    val queueList = rememberLazyListState()
+    // Open the queue at the song that's playing, not at the top.
+    LaunchedEffect(showQueue) { if (showQueue) queueList.scrollToItem(state.queueIndex.coerceAtLeast(0)) }
     SheetOverlay(visible = showQueue, onDismiss = { showQueue = false }) {
         Text("QUEUE", style = MaterialTheme.typography.labelSmall, color = WavemothColors.TextSecondary, modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp))
-        LazyColumn {
+        LazyColumn(state = queueList) {
             itemsIndexed(state.queue, key = { i, s -> "$i-${s.id}" }) { i, s ->
                 SongRow(s, onClick = { player.skipTo(i) }, playing = i == state.queueIndex, index = i, modifier = Modifier.animateItem())
             }

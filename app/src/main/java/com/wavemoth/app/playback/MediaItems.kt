@@ -9,10 +9,12 @@ import com.wavemoth.app.data.Song
 /** Queue items use this scheme; the player swaps it for a real stream URL just before loading. */
 const val SONG_SCHEME = "wavemoth"
 private const val EXTRA_DURATION = "duration_sec"
+private const val EXTRA_RADIO = "from_radio"
 
 fun songUri(id: String): Uri = Uri.parse("$SONG_SCHEME://song/$id")
 
-fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
+/** [fromRadio] marks songs autoplay added, so "Add to queue" can go before them. */
+fun Song.toMediaItem(fromRadio: Boolean = false): MediaItem = MediaItem.Builder()
     .setMediaId(id)
     .setUri(songUri(id))
     .setMediaMetadata(
@@ -22,7 +24,10 @@ fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
             .setArtworkUri(Uri.parse(thumbnail))
             .setIsPlayable(true)
             .setIsBrowsable(false)
-            .setExtras(Bundle().apply { putLong(EXTRA_DURATION, durationSec) })
+            .setExtras(Bundle().apply {
+                putLong(EXTRA_DURATION, durationSec)
+                if (fromRadio) putBoolean(EXTRA_RADIO, true)
+            })
             .build(),
     )
     .build()
@@ -34,6 +39,8 @@ fun MediaItem.toSong(): Song = Song(
     durationSec = mediaMetadata.extras?.getLong(EXTRA_DURATION) ?: 0L,
     thumbnail = mediaMetadata.artworkUri?.toString().orEmpty(),
 )
+
+val MediaItem.isFromRadio: Boolean get() = mediaMetadata.extras?.getBoolean(EXTRA_RADIO) == true
 
 /** Items sent from the UI lose their URI on the way to the service; put it back. */
 fun MediaItem.withSongUri(): MediaItem =

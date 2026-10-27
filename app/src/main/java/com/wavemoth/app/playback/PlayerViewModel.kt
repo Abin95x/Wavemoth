@@ -161,8 +161,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app), PlayerControls 
         if (mediaItemCount == 0) play(listOf(song)) else addMediaItem(currentMediaItemIndex + 1, song.toMediaItem())
     }
 
+    /** Goes after your own queued songs but before anything autoplay added. */
     override fun addToQueue(song: Song) = withController {
-        if (mediaItemCount == 0) play(listOf(song)) else addMediaItem(song.toMediaItem())
+        if (mediaItemCount == 0) return@withController play(listOf(song))
+        val firstRadio = (currentMediaItemIndex + 1 until mediaItemCount).firstOrNull { getMediaItemAt(it).isFromRadio }
+        if (firstRadio != null) addMediaItem(firstRadio, song.toMediaItem()) else addMediaItem(song.toMediaItem())
     }
 
     override fun togglePlay() {

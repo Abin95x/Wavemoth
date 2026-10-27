@@ -11,6 +11,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
@@ -58,7 +59,10 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+        // Never shuffle behind the scenes: shuffle reorders the queue itself (see QueueOrder).
+        player.setShuffleOrder(ShuffleOrder.UnshuffledShuffleOrder(0))
         player.addListener(QueueListener(player))
+        player.addListener(shuffler)
 
         val openApp = PendingIntent.getActivity(
             this, 0,
@@ -67,7 +71,7 @@ class PlaybackService : MediaSessionService() {
         )
         session = MediaSession.Builder(this, player)
             .setSessionActivity(openApp)
-            .setCallback(SessionCallback)
+            .setCallback(SessionCallback())
             .build()
     }
 
@@ -95,13 +99,63 @@ class PlaybackService : MediaSessionService() {
         super.onDestroy()
     }
 
-    private object SessionCallback : MediaSession.Callback {
+    private inner class SessionCallback : MediaSession.Callback {
         override fun onAddMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>,
         ): ListenableFuture<MutableList<MediaItem>> =
             Futures.immediateFuture(mediaItems.map { it.withSongUri() }.toMutableList())
+
+        /** A new list while shuffle is on starts with the tapped song and shuffles the rest. */
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val items = mediaItems.map { it.withSongUri() }
+            val start = if (startIndex == C.INDEX_UNSET) 0 else startIndex
+            if (!mediaSession.player.shuffleModeEnabled || items.isEmpty()) {
+                return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, start, startPositionMs))
+            }
+            shuffler.original = items.map { it.mediaId }
+            val order = QueueOrder.shuffle(items.size, start)
+            return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(order.map { items[it] }, 0, startPositionMs))
+        }
+    }
+
+    private val shuffler = Shuffler()
+
+    /** Turns shuffle on and off by reordering the queue, without interrupting the current song. */
+    private inner class Shuffler : Player.Listener {
+        /** Song ids in the order they had before shuffle was turned on. */
+        var original: List<String> = emptyList()
+
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            val player = session?.player ?: return
+            val items = (0 until player.mediaItemCount).map { player.getMediaItemAt(it) }
+            if (items.isEmpty()) return
+            val order = if (shuffleModeEnabled) {
+                original = items.map { it.mediaId }
+                QueueOrder.shuffle(items.size, player.currentMediaItemIndex)
+            } else {
+                QueueOrder.restore(items.map { it.mediaId }, original)
+            }
+            reorder(player, items, order)
+        }
+
+        /** Swaps every song except the playing one, so playback carries on untouched. */
+        private fun reorder(player: Player, items: List<MediaItem>, order: List<Int>) {
+            val current = player.currentMediaItemIndex
+            val at = order.indexOf(current)
+            if (at < 0) return
+            player.removeMediaItems(current + 1, items.size)
+            player.removeMediaItems(0, current)
+            player.addMediaItems(0, order.subList(0, at).map { items[it] })
+            player.addMediaItems(order.subList(at + 1, order.size).map { items[it] })
+        }
     }
 
     /** Records history, preloads the next song, recovers from expired URLs and autoplays related songs. */
@@ -176,7 +230,7 @@ class PlaybackService : MediaSessionService() {
                         Radio.pick(pools, queue.mapTo(HashSet()) { it.mediaId }, taste, app.library.liked.value)
                     }
                 }.getOrDefault(emptyList())
-                if (picks.isNotEmpty()) player.addMediaItems(picks.map { it.toMediaItem() })
+                if (picks.isNotEmpty()) player.addMediaItems(picks.map { it.toMediaItem(fromRadio = true) })
                 fetchingRelated = false
             }
         }
