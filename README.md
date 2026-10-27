@@ -67,8 +67,8 @@ playlists and history live on your phone, not on someone's server.
 
 **Home**
 - Shortcuts to Liked Songs and Downloads
-- Your 15 most recently played songs
 - The artists you like and play most. Tap one to open their page
+- Your 15 most recently played songs
 
 **Downloads**
 - Download any playlist, album or Liked Songs with one tap, or your whole library from Library → ⋮ → Download all songs
@@ -77,6 +77,7 @@ playlists and history live on your phone, not on someone's server.
 
 **Library**
 - Liked Songs, Downloads, recently played, and your own playlists (create, rename, delete)
+- Sort Liked Songs by date added (newest or oldest first), title, artist or duration. Your choice is remembered
 - Sort Liked Songs by date added (newest or oldest first), title, artist or duration. Your choice is remembered
 - Show the library as a list or a grid of covers
 - Import a playlist from a `.csv` file. Each row is matched on YouTube Music

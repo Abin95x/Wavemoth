@@ -66,7 +66,7 @@ import kotlinx.coroutines.withContext
 /** How many recently played songs the Home shelf shows; the full history is in Library. */
 private const val HOME_RECENT_LIMIT = 15
 
-/** Home shows only your own music: shortcuts, what you played recently, your top artists and your playlists. */
+/** Home shows only your own music: shortcuts, your top artists, what you played recently and your playlists. */
 @Composable
 fun HomeScreen(
     onOpenLiked: () -> Unit,
@@ -109,11 +109,6 @@ fun HomeScreen(
             }
         }
 
-        if (recent.isNotEmpty()) {
-            item { SectionLabel("Recently played") }
-            item { SongShelf(recent.take(HOME_RECENT_LIMIT), "Recently played") }
-        }
-
         if (artists.isNotEmpty()) {
             item { SectionLabel("Artists") }
             item {
@@ -121,6 +116,11 @@ fun HomeScreen(
                     items(artists, key = { it.name.lowercase() }) { a -> ArtistCard(a, onOpenArtist) }
                 }
             }
+        }
+
+        if (recent.isNotEmpty()) {
+            item { SectionLabel("Recently played") }
+            item { SongShelf(recent.take(HOME_RECENT_LIMIT), "Recently played") }
         }
 
         if (playlists.isNotEmpty()) {
