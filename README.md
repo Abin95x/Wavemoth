@@ -45,7 +45,7 @@ A music player for Android that streams from YouTube Music. No account, no ads, 
 **Settings**
 - Stop music when the app is swiped away from Recents (on by default)
 - Clear the song and artwork cache. Your library and downloads are kept
-- Buy me a coffee link under About
+- Buy me a coffee button (in yellow) under About
 
 ## Download
 
