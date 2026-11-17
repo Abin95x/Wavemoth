@@ -40,7 +40,7 @@ playlists and history live on your phone, not on someone's server.
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/wavemoth-home-v2.png" width="19%" alt="Home with recently played and your artists">
+  <img src="docs/screenshots/wavemoth-home-v2.png" width="19%" alt="Home">
   <img src="docs/screenshots/wavemoth-search-v2.png" width="19%" alt="Search with genres to browse">
   <img src="docs/screenshots/wavemoth-search-results.png" width="19%" alt="Search results with artists and songs">
   <img src="docs/screenshots/wavemoth-library-v2.png" width="19%" alt="Library as a grid">
@@ -63,12 +63,12 @@ playlists and history live on your phone, not on someone's server.
 - Play next / add to queue from any song. Added songs go before anything autoplay picked
 - Mini player: tap to open the full player, swipe left or right to skip songs. The cover in the full player swipes the same way
 - Time-synced lyrics from [LRCLIB](https://lrclib.net). Tap a line to jump to it
+- Picks up where you left off: close the app (even by swiping it away from Recents) and the same queue, song and position come back paused in the mini player. Press play to carry on
 - Autoplay radio when the queue ends. It picks related songs and weighs in the artists you like and play, songs you skipped, and what you played recently
 
 **Home**
 - Shortcuts to Liked Songs and Downloads
-- The artists you like and play most. Tap one to open their page
-- Your 15 most recently played songs
+- A circular music visualizer that moves with the song that's playing: bass at the bottom, treble at the top, loud bars turn red, and a red arc shows how far into the song you are. Tap it to open the player. It reads the audio inside the app, so it needs no microphone permission
 
 **Downloads**
 - Download any playlist, album or Liked Songs with one tap, or your whole library from Library → ⋮ → Download all songs
@@ -78,7 +78,6 @@ playlists and history live on your phone, not on someone's server.
 **Library**
 - Liked Songs, Downloads, recently played, and your own playlists (create, rename, delete)
 - Sort Liked Songs by date added (newest or oldest first), title, artist or duration. Your choice is remembered
-- Sort Liked Songs by date added (newest or oldest first), title, artist or duration. Your choice is remembered
 - Show the library as a list or a grid of covers
 - Import a playlist from a `.csv` file. Each row is matched on YouTube Music
 - Import a `.csv` file straight into Liked Songs (Liked Songs → ⋮ → Import from file). Songs you already like aren't added twice
@@ -86,7 +85,7 @@ playlists and history live on your phone, not on someone's server.
 - Back up and restore your whole library as a JSON file
 
 **Settings**
-- Stop music when the app is swiped away from Recents (on by default)
+- Stop music when the app is swiped away from Recents (on by default). Open the app again to resume
 - Clear the song and artwork cache. Your library and downloads are kept
 
 ## Install and use
@@ -180,7 +179,8 @@ and fake search results, so they don't touch the network.
 | Offline downloads (Media3 DownloadManager) | `download/Downloads.kt`, `download/DownloadsService.kt` |
 | Audio fetched in short ranged requests, so YouTube doesn't throttle it | `playback/ChunkedDataSource.kt` |
 | Autoplay radio scoring | `data/Radio.kt`, `data/SkipHistory.kt` |
-| Your top artists on Home | `data/TopArtists.kt` |
+| Home visualizer: audio tapped on its way to the speaker, FFT into frequency bands | `playback/AudioSpectrum.kt`, `ui/home/Visualizer.kt` |
+| Resume where you left off (queue, song, position) | `playback/LastSession.kt` |
 | Lyrics (LRCLIB + LRC parser) | `data/Lyrics.kt` |
 | Library, playlists, backup | `data/LibraryRepository.kt` |
 | CSV import / export | `data/PlaylistFile.kt`, `data/PlaylistImporter.kt` |

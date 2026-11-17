@@ -17,6 +17,7 @@ import com.wavemoth.app.data.Settings
 import com.wavemoth.app.data.SkipHistory
 import com.wavemoth.app.data.YouTubeSource
 import com.wavemoth.app.download.Downloads
+import com.wavemoth.app.playback.LastSession
 import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -40,6 +41,9 @@ class WavemothApp : Application(), ImageLoaderFactory {
     val settings: Settings by lazy { Settings(this) }
 
     val skips: SkipHistory by lazy { SkipHistory(this) }
+
+    /** What was playing when the app was closed, so it can be resumed. */
+    val lastSession: LastSession by lazy { LastSession(this) }
 
     val databaseProvider: StandaloneDatabaseProvider by lazy { StandaloneDatabaseProvider(this) }
 

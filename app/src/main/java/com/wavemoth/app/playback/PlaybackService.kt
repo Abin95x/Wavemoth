@@ -1,6 +1,7 @@
 package com.wavemoth.app.playback
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -9,7 +10,9 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.MediaSession
@@ -25,8 +28,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -46,7 +52,13 @@ class PlaybackService : MediaSessionService() {
             .setBufferDurationsMs(15_000, 60_000, 1_000, 2_000)
             .build()
 
-        val player = ExoPlayer.Builder(this)
+        // Same audio output as usual, plus a copy of the sound for the Home visualizer.
+        val renderers = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink? =
+                super.buildAudioSink(context, enableFloatOutput, enableAudioTrackPlaybackParams)?.let(::SpectrumAudioSink)
+        }
+
+        val player = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(AudioSources.forPlayback(app)))
             .setLoadControl(loadControl)
             .setAudioAttributes(
@@ -61,8 +73,11 @@ class PlaybackService : MediaSessionService() {
             .build()
         // Never shuffle behind the scenes: shuffle reorders the queue itself (see QueueOrder).
         player.setShuffleOrder(ShuffleOrder.UnshuffledShuffleOrder(0))
+        // Restore before adding listeners, so bringing back the last session isn't treated as a new play.
+        app.lastSession.load()?.let { restore(player, it) }
         player.addListener(QueueListener(player))
         player.addListener(shuffler)
+        player.addListener(SessionSaver(player))
 
         val openApp = PendingIntent.getActivity(
             this, 0,
@@ -77,9 +92,23 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
+    /**
+     * Puts back what was playing when the app was last closed, paused and not loaded, so it shows in
+     * the mini player and starts from the same spot when you press play.
+     */
+    private fun restore(player: Player, saved: SavedSession) {
+        player.repeatMode = saved.repeatMode
+        player.shuffleModeEnabled = saved.shuffle
+        shuffler.original = saved.unshuffled
+        player.setMediaItems(saved.items, saved.index, saved.positionMs)
+    }
+
+    private val lastSession get() = (application as WavemothApp).lastSession
+
     /** Called when the app is swiped away from Recents. */
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = session?.player
+        if (player != null && player.mediaItemCount > 0) lastSession.savePosition(player)
         val stopOnSwipe = (application as WavemothApp).settings.stopOnSwipe.value
         if (player == null || stopOnSwipe || !player.playWhenReady || player.mediaItemCount == 0) {
             // Stopping the player also removes the media notification.
@@ -90,6 +119,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        session?.player?.let { if (it.mediaItemCount > 0) lastSession.savePosition(it) }
         session?.run {
             player.release()
             release()
@@ -123,6 +153,49 @@ class PlaybackService : MediaSessionService() {
             shuffler.original = items.map { it.mediaId }
             val order = QueueOrder.shuffle(items.size, start)
             return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(order.map { items[it] }, 0, startPositionMs))
+        }
+
+        /** Play pressed with nothing loaded (e.g. a headphone button): carry on from the last session. */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val saved = lastSession.load()
+                ?: return Futures.immediateFailedFuture(UnsupportedOperationException("Nothing to resume"))
+            mediaSession.player.repeatMode = saved.repeatMode
+            mediaSession.player.shuffleModeEnabled = saved.shuffle
+            shuffler.original = saved.unshuffled
+            return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(saved.items, saved.index, saved.positionMs))
+        }
+    }
+
+    /** Keeps [LastSession] up to date: the queue when it changes, the position every few seconds while playing. */
+    private inner class SessionSaver(private val player: Player) : Player.Listener {
+        private var ticker: Job? = null
+
+        override fun onEvents(player: Player, events: Player.Events) {
+            if (player.mediaItemCount == 0) return
+            if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
+                lastSession.saveQueue((0 until player.mediaItemCount).map(player::getMediaItemAt), shuffler.original)
+            }
+            if (events.containsAny(
+                    Player.EVENT_TIMELINE_CHANGED,
+                    Player.EVENT_MEDIA_ITEM_TRANSITION,
+                    Player.EVENT_POSITION_DISCONTINUITY,
+                    Player.EVENT_IS_PLAYING_CHANGED,
+                    Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                    Player.EVENT_REPEAT_MODE_CHANGED,
+                )
+            ) lastSession.savePosition(player)
+            if (events.contains(Player.EVENT_IS_PLAYING_CHANGED)) {
+                ticker?.cancel()
+                ticker = if (!player.isPlaying) null else scope.launch {
+                    while (isActive) {
+                        delay(10_000)
+                        lastSession.savePosition(player)
+                    }
+                }
+            }
         }
     }
 
@@ -197,6 +270,11 @@ class PlaybackService : MediaSessionService() {
                 player.prepare()
                 player.play()
             }
+        }
+
+        /** A restored session isn't loaded yet; load it as soon as anything asks it to play. */
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (playWhenReady && player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) player.prepare()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {

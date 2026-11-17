@@ -82,7 +82,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         SectionHeader("Playback")
         SwitchRow(
             title = "Stop music when app is closed",
-            subtitle = "Swiping Wavemoth away from Recents stops playback and removes the notification",
+            subtitle = "Swiping Wavemoth away from Recents stops playback and removes the notification. Open the app again to carry on where you left off",
             checked = stopOnSwipe,
             onChange = app.settings::setStopOnSwipe,
         )

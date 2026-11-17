@@ -109,6 +109,9 @@ class AppUiTest {
     private fun launch(state: PlayerUiState? = null) {
         state?.let { player.state.value = FakePlayer.withNeighbours(it) }
         if (library.playlists.value.none { it.name == "My Playlist" }) library.importPlaylist("My Playlist", mySongs)
+        // The Home visualizer animates every frame while a song plays, so Compose never goes idle:
+        // stop the clock before the first frame in that case.
+        if (player.state.value.isPlaying) rule.mainClock.autoAdvance = false
         rule.setContent { WavemothTheme { WavemothRoot(player) } }
         // Drive time by hand: a blinking text cursor inside a dialog never lets Robolectric go idle.
         rule.mainClock.autoAdvance = false
@@ -154,14 +157,17 @@ class AppUiTest {
     fun tabsSettingsAndHome() {
         launch()
         assertTrue(exists("wavemoth", substring = true))
-        assertTrue(exists("PLAYLISTS"))
+        // Home is shortcuts and the visualizer; playlists, artists and history live in Library.
+        assertTrue(exists("Liked Songs") && exists("Downloads"))
+        assertTrue(exists("Nothing playing"))
+        assertFalse(exists("PLAYLISTS") || exists("RECENTLY PLAYED") || exists("ARTISTS"))
 
         tab("Search").performClick(); settle()
         assertTrue(exists("BROWSE"))
         tab("Library").performClick(); settle()
         assertTrue(exists("Import playlist file"))
         tab("Home").performClick(); settle()
-        assertTrue(exists("PLAYLISTS"))
+        assertTrue(exists("Nothing playing"))
 
         // Switching tabs opens the tab's main page, not the page left open there.
         tab("Library").performClick(); settle()
@@ -190,7 +196,7 @@ class AppUiTest {
         assertEquals(Intent.ACTION_VIEW, opened.action)
         assertEquals("https://buymeacoffee.com/abin95x", opened.dataString)
         clickDesc("Back")
-        assertTrue(exists("PLAYLISTS"))
+        assertTrue(exists("Nothing playing"))
     }
 
     @Test
@@ -223,6 +229,7 @@ class AppUiTest {
         val mine = library.playlists.value.single()
         assertEquals(60, mine.songs.size)
 
+        tab("Library").performClick(); settle()
         rule.onAllNodesWithText("My Playlist").onFirst().performClick(); settle()
         assertTrue(exists("60 songs", substring = true))
 
@@ -244,6 +251,7 @@ class AppUiTest {
     fun downloadButtonsStartDownloads() {
         launch()
         app.downloads.manager.pauseDownloads()  // queue only; nothing touches the network in tests
+        tab("Library").performClick(); settle()
         rule.onAllNodesWithText("My Playlist").onFirst().performClick(); settle()
         clickDesc("Download all")
         // Every song is queued at once, and the download service is started to keep it going.
@@ -264,6 +272,7 @@ class AppUiTest {
     @Test
     fun songOptionsSheet() {
         launch()
+        tab("Library").performClick(); settle()
         rule.onAllNodesWithText("My Playlist").onFirst().performClick(); settle()
         val first = library.playlists.value.single().songs.first()
         fun openOptions() { rule.onAllNodesWithContentDescription("More options").onFirst().performClick(); settle() }

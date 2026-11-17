@@ -11,6 +11,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.wavemoth.app.WavemothApp
 import com.wavemoth.app.data.Song
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
@@ -81,7 +82,9 @@ interface PlayerControls {
 /** The UI's handle on the playback service. */
 class PlayerViewModel(app: Application) : AndroidViewModel(app), PlayerControls {
 
-    private val _state = MutableStateFlow(PlayerUiState())
+    private val lastSession = (app as WavemothApp).lastSession
+
+    private val _state = MutableStateFlow(PlayerUiState(source = lastSession.source))
     override val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
     private val _progress = MutableStateFlow(PlaybackProgress())
@@ -118,9 +121,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app), PlayerControls 
     }
 
     private fun sampleProgress(c: Player) {
+        // A resumed song isn't loaded until you press play; until then use the length we stored.
+        val knownDuration = c.duration.takeIf { it > 0 } ?: ((c.currentMediaItem?.toSong()?.durationSec ?: 0) * 1000)
         _progress.value = PlaybackProgress(
             positionMs = c.currentPosition,
-            durationMs = c.duration.coerceAtLeast(0),
+            durationMs = knownDuration,
             playing = c.isPlaying,
         )
     }
@@ -150,6 +155,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app), PlayerControls 
     override fun play(songs: List<Song>, index: Int, source: String) {
         if (songs.isEmpty()) return
         _state.update { it.copy(source = source, error = null) }
+        lastSession.source = source
         withController {
             setMediaItems(songs.map { it.toMediaItem() }, index.coerceIn(songs.indices), 0)
             prepare()

@@ -212,12 +212,14 @@ fun WavemothRoot(player: PlayerControls) {
                 ) {
                     composable("home") {
                         HomeScreen(
+                            current = state.current,
+                            isPlaying = state.isPlaying,
+                            progress = player.progress,
+                            onOpenPlayer = { showPlayer = true },
                             onOpenLiked = { nav.navigate("liked") },
                             onOpenDownloads = { nav.navigate("downloads") },
-                            onOpenPlaylist = { nav.navigate("playlist/$it") },
                             onOpenSearch = { nav.navigateToTab("search") },
                             onOpenSettings = { nav.navigate("settings") },
-                            onOpenArtist = { name, image -> nav.openArtist(name, image) },
                         )
                     }
                     composable(
