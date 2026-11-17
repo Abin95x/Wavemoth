@@ -2,7 +2,19 @@
 
 package com.wavemoth.app.ui.home
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import com.wavemoth.app.ui.components.Artwork
+import com.wavemoth.app.ui.components.Motion
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -94,16 +106,63 @@ fun HomeScreen(
             }
         }
 
-        item { NowPlaying(current, isPlaying, progress, onOpenPlayer, onOpenSearch) }
+        item {
+            val album by app.settings.homeShowsAlbum.collectAsState()
+            ViewSwitch(album, app.settings::setHomeShowsAlbum)
+            NowPlaying(current, isPlaying, progress, album, onOpenPlayer, onOpenSearch)
+        }
     }
 }
 
-/** The visualizer with the playing song under it; tap to open the player. */
+/** Equalizer or Album: what the big square on Home shows. Remembered. */
+@Composable
+private fun ViewSwitch(album: Boolean, onChange: (Boolean) -> Unit) {
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Row(
+            Modifier
+                .clip(shape)
+                .background(WavemothColors.Surface)
+                .border(1.dp, WavemothColors.Hairline, shape)
+                .padding(3.dp)
+                .selectableGroup(),
+        ) {
+            ViewOption("Equalizer", Icons.Filled.GraphicEq, selected = !album) { onChange(false) }
+            ViewOption("Album", Icons.Filled.Album, selected = album) { onChange(true) }
+        }
+    }
+}
+
+@Composable
+private fun ViewOption(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+    val background by animateColorAsState(if (selected) WavemothColors.RedDeep else Color.Transparent, tween(Motion.MEDIUM), label = "viewBg")
+    val content by animateColorAsState(if (selected) Color.White else WavemothColors.TextSecondary, tween(Motion.MEDIUM), label = "viewFg")
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(background)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = content, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = content)
+    }
+}
+
+/** The equalizer (or the cover) with the playing song under it; tap to open the player. */
 @Composable
 private fun NowPlaying(
     current: Song?,
     isPlaying: Boolean,
     progress: StateFlow<PlaybackProgress>,
+    album: Boolean,
     onOpenPlayer: () -> Unit,
     onOpenSearch: () -> Unit,
 ) {
@@ -112,16 +171,22 @@ private fun NowPlaying(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val open = if (current != null) Modifier.pressClick(onClick = onOpenPlayer) else Modifier
-        Visualizer(
-            playing = isPlaying,
-            progress = { progress.value },
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 420.dp)
-                .aspectRatio(1f)
-                .then(open)
-                .semantics { contentDescription = if (current != null) "Music visualizer. Open player" else "Music visualizer" },
-        )
+        val square = Modifier.fillMaxWidth().widthIn(max = 420.dp).aspectRatio(1f)
+        Crossfade(album && current != null, animationSpec = tween(Motion.MEDIUM), label = "homeView") { showAlbum ->
+            if (showAlbum) {
+                Box(square.then(open).padding(20.dp)) {
+                    Artwork(current?.thumbnail, Modifier.fillMaxSize(), RoundedCornerShape(16.dp))
+                }
+            } else {
+                Visualizer(
+                    playing = isPlaying,
+                    progress = { progress.value },
+                    modifier = square
+                        .then(open)
+                        .semantics { contentDescription = if (current != null) "Music visualizer. Open player" else "Music visualizer" },
+                )
+            }
+        }
         if (current != null) {
             Text(
                 current.title,

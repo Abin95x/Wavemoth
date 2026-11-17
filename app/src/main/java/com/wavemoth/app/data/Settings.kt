@@ -39,9 +39,20 @@ class Settings(context: Context) {
         _likedSort.value = sort
     }
 
+    private val _homeShowsAlbum = MutableStateFlow(prefs.getBoolean(KEY_HOME_ALBUM, false))
+
+    /** Home shows the playing song's cover instead of the equalizer. Off by default. */
+    val homeShowsAlbum: StateFlow<Boolean> = _homeShowsAlbum.asStateFlow()
+
+    fun setHomeShowsAlbum(album: Boolean) {
+        prefs.edit().putBoolean(KEY_HOME_ALBUM, album).apply()
+        _homeShowsAlbum.value = album
+    }
+
     private companion object {
         const val KEY_STOP_ON_SWIPE = "stop_on_swipe"
         const val KEY_LIBRARY_GRID = "library_grid"
         const val KEY_LIKED_SORT = "liked_sort"
+        const val KEY_HOME_ALBUM = "home_album"
     }
 }
