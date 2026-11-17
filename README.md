@@ -40,16 +40,17 @@ playlists and history live on your phone, not on someone's server.
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/wavemoth-home-v2.png" width="19%" alt="Home">
-  <img src="docs/screenshots/wavemoth-search-v2.png" width="19%" alt="Search with genres to browse">
+  <img src="docs/screenshots/wavemoth-home.png" width="19%" alt="Home with the music visualizer">
+  <img src="docs/screenshots/wavemoth-home-album.png" width="19%" alt="Home showing the album cover">
+  <img src="docs/screenshots/wavemoth-search.png" width="19%" alt="Search with genres to browse">
   <img src="docs/screenshots/wavemoth-search-results.png" width="19%" alt="Search results with artists and songs">
-  <img src="docs/screenshots/wavemoth-library-v2.png" width="19%" alt="Library as a grid">
-  <img src="docs/screenshots/wavemoth-liked.png" width="19%" alt="Liked Songs">
+  <img src="docs/screenshots/wavemoth-library.png" width="19%" alt="Library as a grid">
 </p>
 <p align="center">
+  <img src="docs/screenshots/wavemoth-liked.png" width="19%" alt="Liked Songs">
   <img src="docs/screenshots/wavemoth-nowplaying.png" width="19%" alt="Now playing">
-  <img src="docs/screenshots/wavemoth-lyrics-v2.png" width="19%" alt="Time-synced lyrics">
-  <img src="docs/screenshots/wavemoth-queue-v2.png" width="19%" alt="Queue">
+  <img src="docs/screenshots/wavemoth-lyrics.png" width="19%" alt="Time-synced lyrics">
+  <img src="docs/screenshots/wavemoth-queue.png" width="19%" alt="Queue">
   <img src="docs/screenshots/wavemoth-settings.png" width="19%" alt="Settings">
 </p>
 
@@ -69,6 +70,7 @@ playlists and history live on your phone, not on someone's server.
 **Home**
 - Shortcuts to Liked Songs and Downloads
 - A circular music visualizer that moves with the song that's playing: bass at the bottom, treble at the top, loud bars turn red, and a red arc shows how far into the song you are. Tap it to open the player. It reads the audio inside the app, so it needs no microphone permission
+- Switch at the top between the equalizer and the playing song's album cover. Your choice is remembered
 
 **Downloads**
 - Download any playlist, album or Liked Songs with one tap, or your whole library from Library → ⋮ → Download all songs
