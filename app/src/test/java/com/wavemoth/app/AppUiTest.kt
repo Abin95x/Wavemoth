@@ -195,7 +195,11 @@ class AppUiTest {
         assertTrue(exists("Highest available", substring = true))
         click("Clear cache")
         waitForText("of saved songs", substring = true)
-        rule.onNodeWithText("Buy me a coffee").performScrollTo().performClick(); settle()
+        // The visualizer list pushes this off screen, and scrolling to it needs the clock running.
+        rule.mainClock.autoAdvance = true
+        rule.onNodeWithText("Buy me a coffee").performScrollTo().performClick()
+        rule.mainClock.autoAdvance = false
+        settle()
         val opened = shadowOf(rule.activity).nextStartedActivity
         assertEquals(Intent.ACTION_VIEW, opened.action)
         assertEquals("https://buymeacoffee.com/abin95x", opened.dataString)
