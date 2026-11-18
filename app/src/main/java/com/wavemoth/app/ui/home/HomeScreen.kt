@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.wavemoth.app.WavemothApp
+import com.wavemoth.app.data.VisualizerProgress
 import com.wavemoth.app.playback.PlayerControls
 import com.wavemoth.app.playback.PlayerUiState
 import com.wavemoth.app.ui.components.PillButton
@@ -227,7 +228,8 @@ private fun NowPlaying(
             playing = state.isPlaying,
             progress = { player.progress.value },
             actions = current?.let { VisualizerActions(player::togglePlay, player::seekTo) },
-            modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp).aspectRatio(1f),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp)
+                .aspectRatio(if (style.progress == VisualizerProgress.Straight) 1.2f else 1f),
         )
         if (current != null) {
             Column(

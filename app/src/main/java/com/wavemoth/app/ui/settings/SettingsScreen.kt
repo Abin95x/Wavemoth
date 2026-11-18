@@ -49,6 +49,7 @@ import androidx.media3.common.util.UnstableApi
 import coil.imageLoader
 import com.wavemoth.app.BuildConfig
 import com.wavemoth.app.WavemothApp
+import com.wavemoth.app.data.VisualizerProgress
 import com.wavemoth.app.data.VisualizerStyle
 import com.wavemoth.app.ui.components.ConfirmDialog
 import com.wavemoth.app.ui.components.SectionLabel
@@ -207,7 +208,8 @@ private fun VisualizerStyleRow(style: VisualizerStyle, selected: Boolean, onClic
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        VisualizerPreview(style, Modifier.size(56.dp).clip(CircleShape).background(Color.Black))
+        val shape = if (style.progress == VisualizerProgress.Straight) RoundedCornerShape(12.dp) else CircleShape
+        VisualizerPreview(style, Modifier.size(56.dp).clip(shape).background(Color.Black))
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(style.label, style = MaterialTheme.typography.bodyLarge, color = WavemothColors.TextPrimary)

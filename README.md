@@ -69,8 +69,8 @@ playlists and history live on your phone, not on someone's server.
 
 **Home**
 - Shortcuts to Liked Songs and Downloads
-- A music visualizer that moves with the song that's playing, in two styles you can pick in Settings: Classic and Sound Wave. It reads the audio inside the app, so it needs no microphone permission
-- Tap inside the visualizer to play or pause, tap or drag the red ring to seek, and tap the song name to open the player
+- A music visualizer that moves with the song that's playing, in six styles you can pick in Settings: Classic, Sound Wave, Rose Gold, LED Meter, Waveform and Prism. It reads the audio inside the app, so it needs no microphone permission
+- Tap the visualizer to play or pause, tap or drag its progress control to seek (a ring on round styles, a straight bar on the others), and tap the song name to open the player
 - Switch at the top between the visualizer and the Album view, which puts the cover, seek bar and playback controls right on Home. Your choice is remembered
 
 **Downloads**

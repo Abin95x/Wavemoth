@@ -25,33 +25,46 @@ import kotlin.math.sqrt
  */
 object AudioSpectrum {
     const val BANDS = 32
+    const val WAVE_POINTS = 128
     private const val KEEP = 96  // ~2 s of results; more than the speaker buffer ever holds
 
     private val lock = Any()
     private val times = LongArray(KEEP)
     private val frames = Array(KEEP) { FloatArray(BANDS) }
+    private val waves = Array(KEEP) { FloatArray(WAVE_POINTS) }
     private var head = 0
     private var count = 0
 
     /** Where the speaker is now, in the same time base as the results. */
     @Volatile internal var playedUs: Long = Long.MIN_VALUE
 
-    /** Copies the levels (0 to 1, low to high frequencies) of what's audible now into [out]. */
-    fun read(out: FloatArray): Boolean = synchronized(lock) {
+    /**
+     * Copies the levels (0 to 1, low to high frequencies) of what's audible now into [out], and
+     * its shape (-1 to 1, [WAVE_POINTS] long) into [wave].
+     */
+    fun read(out: FloatArray, wave: FloatArray): Boolean = synchronized(lock) {
         val now = playedUs
         for (k in 0 until count) {
             val i = (head - 1 - k + KEEP) % KEEP
             if (times[i] <= now) {
                 frames[i].copyInto(out)
+                waves[i].copyInto(wave)
                 return true
             }
         }
         false
     }
 
-    internal fun push(timeUs: Long, levels: FloatArray) = synchronized(lock) {
+    internal fun push(timeUs: Long, levels: FloatArray, samples: FloatArray) = synchronized(lock) {
         times[head] = timeUs
         levels.copyInto(frames[head])
+        val wave = waves[head]
+        val perPoint = samples.size / WAVE_POINTS
+        for (p in 0 until WAVE_POINTS) {
+            var sum = 0f
+            for (i in 0 until perPoint) sum += samples[p * perPoint + i]
+            wave[p] = sum / perPoint
+        }
         head = (head + 1) % KEEP
         if (count < KEEP) count++
     }
@@ -177,7 +190,7 @@ internal class SpectrumAnalyzer {
             levels[b] = ((db - FLOOR_DB) / (CEIL_DB - FLOOR_DB)).coerceIn(0f, 1f)
         }
         // Tag the result with the middle of the window, when it's actually being heard.
-        AudioSpectrum.push(windowStartUs + SIZE / 2 * 1_000_000L / sampleRate, levels)
+        AudioSpectrum.push(windowStartUs + SIZE / 2 * 1_000_000L / sampleRate, levels, window)
     }
 
     /** Bands spaced evenly in pitch from [LOW_HZ] to [HIGH_HZ], each at least one FFT bin wide. */

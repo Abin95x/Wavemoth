@@ -470,6 +470,21 @@ class AppUiTest {
     }
 
     @Test
+    fun straightVisualizerSeeksFromItsBar() {
+        val songs = listOf(song(1, "Alpha Track"))
+        player.progress.value = PlaybackProgress(positionMs = 0, durationMs = 100_000)
+        WavemothApp.instance.settings.setVisualizerStyle(VisualizerStyle.Prism)
+        launch(PlayerUiState(current = songs[0], queue = songs, queueIndex = 0, source = "Test Mix"))
+
+        val visualizer = rule.onNodeWithContentDescription("Music visualizer")
+        visualizer.performTouchInput { click(Offset(centerX, height * 0.92f)) }; settle()
+        assertTrue("seekTo:50000" in player.calls)
+        assertEquals(0, player.calls.count { it == "togglePlay" })
+        visualizer.performTouchInput { click(Offset(centerX, height * 0.4f)) }; settle()
+        assertEquals(1, player.calls.count { it == "togglePlay" })
+    }
+
+    @Test
     fun searchFiltersArtistAlbumAndPlaylistPages() {
         launch()
         tab("Search").performClick(); settle()
