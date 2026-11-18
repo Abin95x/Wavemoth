@@ -13,7 +13,6 @@ import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import com.wavemoth.app.ui.components.Artwork
 import com.wavemoth.app.ui.components.Motion
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -48,8 +48,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
@@ -57,24 +55,84 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.wavemoth.app.WavemothApp
-import com.wavemoth.app.data.Song
-import com.wavemoth.app.playback.PlaybackProgress
+import com.wavemoth.app.playback.PlayerControls
+import com.wavemoth.app.playback.PlayerUiState
 import com.wavemoth.app.ui.components.PillButton
 import com.wavemoth.app.ui.components.pressClick
+import com.wavemoth.app.ui.player.NowPlayingHeading
+import com.wavemoth.app.ui.player.PlayerContent
+import com.wavemoth.app.ui.player.playerGlow
 import com.wavemoth.app.ui.theme.WavemothColors
-import kotlinx.coroutines.flow.StateFlow
 
-/** Home: shortcuts to your music and a visualizer for what's playing. */
+/** Home: shortcuts and a visualizer for what's playing, or the player in the Album view. */
 @Composable
 fun HomeScreen(
-    current: Song?,
-    isPlaying: Boolean,
-    progress: StateFlow<PlaybackProgress>,
+    state: PlayerUiState,
+    player: PlayerControls,
+    liked: Boolean,
+    onToggleLike: () -> Unit,
+    onDownload: () -> Unit,
+    onMore: () -> Unit,
     onOpenPlayer: () -> Unit,
     onOpenLiked: () -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
+) {
+    val settings = WavemothApp.instance.settings
+    val album by settings.homeShowsAlbum.collectAsState()
+    Crossfade(album && state.current != null, animationSpec = tween(Motion.MEDIUM), label = "homeView") { showPlayer ->
+        if (showPlayer) {
+            AlbumView(state, player, liked, onToggleLike, onDownload, onMore, onOpenSettings) { settings.setHomeShowsAlbum(it) }
+        } else {
+            VisualizerView(state, player, album, onOpenPlayer, onOpenLiked, onOpenDownloads, onOpenSearch, onOpenSettings) { settings.setHomeShowsAlbum(it) }
+        }
+    }
+}
+
+/** The Now Playing player without its extras, with the view switch at the top. */
+@Composable
+private fun AlbumView(
+    state: PlayerUiState,
+    player: PlayerControls,
+    liked: Boolean,
+    onToggleLike: () -> Unit,
+    onDownload: () -> Unit,
+    onMore: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onChangeView: (Boolean) -> Unit,
+) {
+    val progress by player.progress.collectAsState()
+    PlayerContent(
+        state = state,
+        progress = progress,
+        player = player,
+        liked = liked,
+        onToggleLike = onToggleLike,
+        onDownload = onDownload,
+        modifier = Modifier.fillMaxSize().playerGlow(state.isPlaying).padding(horizontal = 24.dp),
+        showExtras = false,
+    ) {
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onOpenSettings) { Icon(Icons.Outlined.Settings, "Settings", tint = WavemothColors.TextSecondary) }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { ViewSwitch(album = true, onChangeView) }
+            IconButton(onClick = onMore) { Icon(Icons.Filled.MoreVert, "More options", tint = WavemothColors.TextPrimary) }
+        }
+        NowPlayingHeading(state.source, Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp))
+    }
+}
+
+@Composable
+private fun VisualizerView(
+    state: PlayerUiState,
+    player: PlayerControls,
+    album: Boolean,
+    onOpenPlayer: () -> Unit,
+    onOpenLiked: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onChangeView: (Boolean) -> Unit,
 ) {
     val app = WavemothApp.instance
     val liked by app.library.liked.collectAsState()
@@ -107,34 +165,28 @@ fun HomeScreen(
         }
 
         item {
-            val album by app.settings.homeShowsAlbum.collectAsState()
-            ViewSwitch(album, app.settings::setHomeShowsAlbum)
-            NowPlaying(current, isPlaying, progress, album, onOpenPlayer, onOpenSearch)
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.Center) {
+                ViewSwitch(album, onChangeView)
+            }
+            NowPlaying(state, player, onOpenPlayer, onOpenSearch)
         }
     }
 }
 
-/** Equalizer or Album: what the big square on Home shows. Remembered. */
+/** Visualizer or Album: what Home shows. Remembered. */
 @Composable
 private fun ViewSwitch(album: Boolean, onChange: (Boolean) -> Unit) {
     val shape = RoundedCornerShape(50)
     Row(
         Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp),
-        horizontalArrangement = Arrangement.Center,
+            .clip(shape)
+            .background(WavemothColors.Surface)
+            .border(1.dp, WavemothColors.Hairline, shape)
+            .padding(3.dp)
+            .selectableGroup(),
     ) {
-        Row(
-            Modifier
-                .clip(shape)
-                .background(WavemothColors.Surface)
-                .border(1.dp, WavemothColors.Hairline, shape)
-                .padding(3.dp)
-                .selectableGroup(),
-        ) {
-            ViewOption("Equalizer", Icons.Filled.GraphicEq, selected = !album) { onChange(false) }
-            ViewOption("Album", Icons.Filled.Album, selected = album) { onChange(true) }
-        }
+        ViewOption("Visualizer", Icons.Filled.GraphicEq, selected = !album) { onChange(false) }
+        ViewOption("Album", Icons.Filled.Album, selected = album) { onChange(true) }
     }
 }
 
@@ -156,54 +208,49 @@ private fun ViewOption(label: String, icon: ImageVector, selected: Boolean, onCl
     }
 }
 
-/** The equalizer (or the cover) with the playing song under it; tap to open the player. */
+/** The visualizer with the playing song under it; tap the song to open the player. */
 @Composable
 private fun NowPlaying(
-    current: Song?,
-    isPlaying: Boolean,
-    progress: StateFlow<PlaybackProgress>,
-    album: Boolean,
+    state: PlayerUiState,
+    player: PlayerControls,
     onOpenPlayer: () -> Unit,
     onOpenSearch: () -> Unit,
 ) {
+    val current = state.current
+    val style by WavemothApp.instance.settings.visualizerStyle.collectAsState()
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        val open = if (current != null) Modifier.pressClick(onClick = onOpenPlayer) else Modifier
-        val square = Modifier.fillMaxWidth().widthIn(max = 420.dp).aspectRatio(1f)
-        Crossfade(album && current != null, animationSpec = tween(Motion.MEDIUM), label = "homeView") { showAlbum ->
-            if (showAlbum) {
-                Box(square.then(open).padding(20.dp)) {
-                    Artwork(current?.thumbnail, Modifier.fillMaxSize(), RoundedCornerShape(16.dp))
-                }
-            } else {
-                Visualizer(
-                    playing = isPlaying,
-                    progress = { progress.value },
-                    modifier = square
-                        .then(open)
-                        .semantics { contentDescription = if (current != null) "Music visualizer. Open player" else "Music visualizer" },
+        Visualizer(
+            style = style,
+            playing = state.isPlaying,
+            progress = { player.progress.value },
+            actions = current?.let { VisualizerActions(player::togglePlay, player::seekTo) },
+            modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp).aspectRatio(1f),
+        )
+        if (current != null) {
+            Column(
+                Modifier.fillMaxWidth().pressClick(onClick = onOpenPlayer),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    current.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = WavemothColors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    current.artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = WavemothColors.TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
                 )
             }
-        }
-        if (current != null) {
-            Text(
-                current.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = WavemothColors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                current.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = WavemothColors.TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
         } else {
             Text("Nothing playing", style = MaterialTheme.typography.titleMedium, color = WavemothColors.TextPrimary)
             Spacer(Modifier.height(12.dp))

@@ -2,14 +2,27 @@ package com.wavemoth.app.ui.home
 
 import android.os.SystemClock
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -18,27 +31,86 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.unit.dp
+import com.wavemoth.app.data.VisualizerStyle
+import com.wavemoth.app.data.formatDuration
 import com.wavemoth.app.playback.AudioSpectrum
 import com.wavemoth.app.playback.PlaybackProgress
 import com.wavemoth.app.ui.theme.WavemothColors
+import kotlinx.coroutines.delay
 import kotlin.math.PI
-import kotlin.math.cos
+import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.min
-import kotlin.math.sin
 
-private const val BARS = 120
-private val Violet = Color(0xFF7C6CF2)
-private val Cyan = Color(0xFF38C6E8)
-private val Core = Color(0xFF0F1320)
+// All as a share of the visualizer's side.
+private const val RING_RADIUS = 0.443f
+private const val RING_TOUCH_FROM = 0.385f
+private const val RING_TOUCH_TO = 0.5f
+
+private val TimeBackground = Color(0xD90F1320)
 private val Faint = Color(0xFFB8BED0)
 
-/** Bar heights, peak dots and the core's wobble, moved along every frame. */
-private class VisualizerState {
+/** What the visualizer can do while a song is loaded. */
+class VisualizerActions(
+    val onTogglePlay: () -> Unit,
+    val onSeek: (Long) -> Unit,
+)
+
+/** Which part of the visualizer a touch [distance] from the middle lands on. */
+internal enum class VisualizerZone { Inside, Ring, Outside }
+
+internal fun visualizerZone(distance: Float, side: Float): VisualizerZone {
+    val share = distance / side
+    return when {
+        share < RING_TOUCH_FROM -> VisualizerZone.Inside
+        share <= RING_TOUCH_TO -> VisualizerZone.Ring
+        else -> VisualizerZone.Outside
+    }
+}
+
+/** How far round the ring a point is, from 0 at the top going clockwise to just under 1. */
+internal fun ringFraction(dx: Float, dy: Float): Float {
+    val turn = (atan2(dx, -dy) / (2 * PI)).toFloat()
+    return if (turn < 0) turn + 1 else turn
+}
+
+/** The next drag position. Stops at the start or end instead of jumping across the top. */
+internal fun continueRingDrag(previous: Float, next: Float): Float = when {
+    next - previous > 0.5f -> 0f
+    previous - next > 0.5f -> 1f
+    else -> next
+}
+
+/** True if a finger at [position] (from the middle) moving by [move] follows the ring. */
+internal fun movesAlongRing(position: Offset, move: Offset): Boolean {
+    val length = position.getDistance()
+    if (length == 0f) return false
+    val outX = position.x / length
+    val outY = position.y / length
+    val outward = abs(move.x * outX + move.y * outY)
+    val around = abs(move.x * outY - move.y * outX)
+    return around >= outward
+}
+
+/** Band levels, peak dots and the clock the styles animate with, moved along every frame. */
+internal class VisualizerState {
     val target = FloatArray(AudioSpectrum.BANDS)
     val levels = FloatArray(AudioSpectrum.BANDS)
     val peaks = FloatArray(AudioSpectrum.BANDS)
+    val path = Path()
     var time = 0f
+
+    /** Thickens lines for small previews. */
+    var stroke = 1f
 
     val moving get() = levels.any { it > 0.002f } || peaks.any { it > 0.002f }
 
@@ -53,7 +125,7 @@ private class VisualizerState {
         if (playing) time += dt
     }
 
-    /** Level at a point between bands, so neighbouring bars blend. */
+    /** Level at a point between bands, so neighbours blend. */
     fun level(of: FloatArray, band: Float): Float {
         val i = band.toInt().coerceIn(0, of.size - 1)
         val j = (i + 1).coerceAtMost(of.size - 1)
@@ -65,19 +137,29 @@ private class VisualizerState {
 }
 
 /**
- * A ring of bars that move with the music: bass at the bottom, treble at the top, mirrored left
- * and right. Loud bars turn red, dots mark recent peaks, the core wobbles with the bass and the
- * red arc shows how far into the song you are.
+ * The music, drawn in the chosen [style]. With a song loaded ([actions] set), the ring round the
+ * edge shows the position and can be tapped or dragged to seek, and a tap inside it plays or pauses.
  */
 @Composable
-fun Visualizer(playing: Boolean, progress: () -> PlaybackProgress, modifier: Modifier = Modifier) {
+fun Visualizer(
+    style: VisualizerStyle,
+    playing: Boolean,
+    progress: () -> PlaybackProgress,
+    actions: VisualizerActions?,
+    modifier: Modifier = Modifier,
+) {
     val state = remember { VisualizerState() }
     var frame by remember { mutableLongStateOf(0L) }
     val isPlaying by rememberUpdatedState(playing)
+    val latestActions by rememberUpdatedState(actions)
+    val latestProgress by rememberUpdatedState(progress)
+    var seeking by remember { mutableStateOf<Float?>(null) }
+    var pending by remember { mutableStateOf<Float?>(null) }  // where we seeked to, until the player catches up
+    val hasSong = actions != null
 
     LaunchedEffect(playing) {
         var last = 0L
-        // Runs while playing, then until the bars have settled; idle otherwise.
+        // Runs while playing, then until the levels have settled; idle otherwise.
         while (isPlaying || state.moving) {
             withFrameNanos { now ->
                 val dt = if (last == 0L) 1 / 60f else ((now - last) / 1e9f).coerceIn(0f, 0.1f)
@@ -87,105 +169,140 @@ fun Visualizer(playing: Boolean, progress: () -> PlaybackProgress, modifier: Mod
             }
         }
     }
+    LaunchedEffect(pending) { if (pending != null) { delay(1_500); pending = null } }
 
-    Canvas(modifier) {
-        frame  // redraw (only) when a new frame was computed
-        drawVisualizer(state, progress())
+    fun commit(fraction: Float) {
+        val duration = latestProgress().durationMs
+        if (duration > 0) {
+            pending = fraction
+            latestActions?.onSeek?.invoke((fraction * duration).toLong())
+        }
+        seeking = null
+    }
+
+    Box(
+        modifier
+            .semantics {
+                contentDescription = "Music visualizer"
+                if (hasSong) {
+                    onClick(if (playing) "Pause music" else "Play music") { latestActions?.onTogglePlay?.invoke(); true }
+                    setProgress("Seek") { target -> commit(target.coerceIn(0f, 1f)); true }
+                }
+            }
+            .pointerInput(hasSong) {
+                if (!hasSong) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val middle = Offset(size.width / 2f, size.height / 2f)
+                    val side = min(size.width, size.height).toFloat()
+                    when (visualizerZone((down.position - middle).getDistance(), side)) {
+                        VisualizerZone.Ring -> trackRing(down, middle, { seeking = it }, ::commit) { seeking = null }
+                        VisualizerZone.Inside -> waitForUpOrCancellation()?.let {
+                            it.consume()
+                            latestActions?.onTogglePlay?.invoke()
+                        }
+                        VisualizerZone.Outside -> Unit
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            frame  // redraw (only) when a new frame was computed
+            drawVisualizerArt(style, state)
+            val now = latestProgress()
+            val fraction = seeking ?: pending ?: now.durationMs.takeIf { it > 0 }?.let {
+                (now.positionAt(SystemClock.elapsedRealtime()).toFloat() / it).coerceIn(0f, 1f)
+            }
+            drawProgressRing(fraction.takeIf { hasSong }, held = seeking != null)
+        }
+        // While seeking, the time you would land on.
+        val seekSeconds by remember {
+            derivedStateOf { seeking?.let { (it * latestProgress().durationMs).toLong() / 1000 } }
+        }
+        seekSeconds?.let { seconds ->
+            Text(
+                seconds.formatDuration().ifEmpty { "0:00" },
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                maxLines = 1,
+                modifier = Modifier
+                    .background(TimeBackground, RoundedCornerShape(50))
+                    .padding(horizontal = 12.dp, vertical = 5.dp),
+            )
+        }
     }
 }
 
-private fun DrawScope.drawVisualizer(s: VisualizerState, progress: PlaybackProgress) {
-    val size = min(this.size.width, this.size.height)
-    val c = center
-    val rBase = size * 0.25f
-    val maxBar = size * 0.165f
-    val minBar = size * 0.012f
-    val px = size / 360f  // ~1dp on a phone-width visualizer
+/** Follows a touch that began on the ring: a tap seeks there, and so does a drag along it. */
+private suspend fun AwaitPointerEventScope.trackRing(
+    down: PointerInputChange,
+    middle: Offset,
+    onMove: (Float) -> Unit,
+    onCommit: (Float) -> Unit,
+    onCancel: () -> Unit,
+) {
+    fun fractionAt(position: Offset) = (position - middle).let { ringFraction(it.x, it.y) }
 
-    // Outer dial: faint dots with clock-position ticks.
-    val rDial = size * 0.47f
-    for (i in 0 until 72) {
-        val a = angle(i, 72)
-        drawCircle(Faint.copy(alpha = 0.18f), radius = 0.9f * px, center = polar(c, rDial, a))
-    }
-    for (i in 0 until 12) {
-        val a = angle(i, 12)
-        val long = i % 3 == 0
-        drawLine(
-            Faint.copy(alpha = if (long) 0.55f else 0.3f),
-            polar(c, rDial - (if (long) 9f else 6f) * px, a), polar(c, rDial + 3f * px, a),
-            strokeWidth = 1.2f * px, cap = StrokeCap.Round,
-        )
-    }
-
-    // Song progress: a thin red arc just outside the tallest bars.
-    val rArc = rBase + maxBar + 10f * px
-    val arcSize = Size(rArc * 2, rArc * 2)
-    val arcTopLeft = Offset(c.x - rArc, c.y - rArc)
-    drawArc(Faint.copy(alpha = 0.08f), -90f, 360f, false, arcTopLeft, arcSize, style = Stroke(1.5f * px))
-    val d = progress.durationMs
-    if (d > 0) {
-        val sweep = 360f * (progress.positionAt(SystemClock.elapsedRealtime()).toFloat() / d).coerceIn(0f, 1f)
-        drawArc(WavemothColors.Red, -90f, sweep, false, arcTopLeft, arcSize, style = Stroke(2f * px, cap = StrokeCap.Round))
-    }
-
-    // Bars and peak dots.
-    val half = BARS / 2
-    val bands = AudioSpectrum.BANDS - 1
-    for (i in 0 until BARS) {
-        val a = angle(i, BARS)
-        // 0 at the top (treble) to 1 at the bottom (bass), the same on both sides.
-        val fromTop = (if (i <= half) i else BARS - i).toFloat() / half
-        val band = (1 - fromTop) * bands
-        val shimmer = 0.88f + 0.12f * sin(i * 1.7f + s.time * 2.3f)
-        val level = (s.level(s.levels, band) * shimmer).coerceIn(0f, 1f)
-        val peak = s.level(s.peaks, band)
-
-        val drift = (sin(2 * a + s.time * 0.35f) + 1) / 2
-        val colour = if (level > 0.84f) WavemothColors.Red else lerp(Violet, Cyan, smooth(drift))
-        val inner = rBase + 3f * px
-        drawLine(
-            colour.copy(alpha = 0.55f + 0.45f * level),
-            polar(c, inner, a), polar(c, inner + minBar + level * maxBar, a),
-            strokeWidth = 2.4f * px, cap = StrokeCap.Round,
-        )
-        if (peak > 0.04f) {
-            drawCircle(colour.copy(alpha = 0.8f), radius = 1.1f * px, center = polar(c, inner + minBar + peak * maxBar + 5f * px, a))
+    // Until the finger has really moved this could be a tap, or the start of scrolling the page.
+    var travel = Offset.Zero
+    var change: PointerInputChange
+    while (true) {
+        change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return
+        if (change.isConsumed) return
+        if (!change.pressed) {
+            change.consume()
+            onCommit(fractionAt(down.position))
+            return
+        }
+        travel += change.positionChange()
+        if (travel.getDistance() > viewConfiguration.touchSlop) {
+            if (!movesAlongRing(change.position - middle, travel)) return
+            break
         }
     }
 
-    // Core: a dark disc with faint rings and ticks.
-    drawCircle(Core, radius = rBase - 2f * px, center = c)
-    drawCircle(Faint.copy(alpha = 0.1f), radius = rBase * 0.9f, center = c, style = Stroke(1f * px))
-    drawCircle(Faint.copy(alpha = 0.06f), radius = rBase * 0.55f, center = c, style = Stroke(1f * px))
-    for (i in 0 until 60) {
-        val a = angle(i, 60)
-        drawLine(Faint.copy(alpha = 0.16f), polar(c, rBase * 0.66f, a), polar(c, rBase * 0.71f, a), strokeWidth = 1f * px)
+    change.consume()
+    var fraction = fractionAt(change.position)
+    onMove(fraction)
+    while (true) {
+        change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return onCancel()
+        change.consume()
+        if (!change.pressed) return onCommit(fraction)
+        fraction = continueRingDrag(fraction, fractionAt(change.position))
+        onMove(fraction)
     }
-
-    // A soft shape in the middle that swells and wobbles with the bass.
-    val bass = s.average(0, 6)
-    val mid = s.average(6, 16)
-    val r0 = rBase * (0.3f + 0.06f * bass)
-    val blob = Path()
-    val points = 72
-    for (p in 0..points) {
-        val a = 2 * PI.toFloat() * p / points
-        val r = r0 * (1 + 0.04f * sin(6 * a + s.time * 0.8f) + 0.12f * bass * sin(3 * a + s.time * 1.3f) + 0.07f * mid * sin(5 * a - s.time * 1.7f))
-        val pt = polar(c, r, a)
-        if (p == 0) blob.moveTo(pt.x, pt.y) else blob.lineTo(pt.x, pt.y)
-    }
-    blob.close()
-    drawPath(blob, Cyan.copy(alpha = 0.85f), style = Stroke(1.6f * px))
-
-    val arm = 5f * px
-    drawLine(Color.White, Offset(c.x - arm, c.y), Offset(c.x + arm, c.y), strokeWidth = 1.4f * px)
-    drawLine(Color.White, Offset(c.x, c.y - arm), Offset(c.x, c.y + arm), strokeWidth = 1.4f * px)
 }
 
-/** Angle of step [i] of [n] round the circle, starting at the top. */
-private fun angle(i: Int, n: Int): Float = (2 * PI * i / n - PI / 2).toFloat()
+/** A still picture of [style] for the Settings list. */
+@Composable
+fun VisualizerPreview(style: VisualizerStyle, modifier: Modifier = Modifier) {
+    val state = remember {
+        VisualizerState().apply {
+            stroke = 2.2f
+            time = 2f
+            for (i in levels.indices) {
+                levels[i] = 0.2f + 0.6f * abs(kotlin.math.sin(i * 0.7f)) * (1f - i / 64f)
+                peaks[i] = levels[i]
+            }
+        }
+    }
+    Canvas(modifier) { drawVisualizerArt(style, state) }
+}
 
-private fun polar(c: Offset, r: Float, a: Float) = Offset(c.x + r * cos(a), c.y + r * sin(a))
+/** The song's position round the edge, with a knob to show it can be moved. */
+private fun DrawScope.drawProgressRing(fraction: Float?, held: Boolean) {
+    val side = min(size.width, size.height)
+    val px = side / 360f
+    val radius = side * RING_RADIUS
+    val box = Size(radius * 2, radius * 2)
+    val topLeft = Offset(center.x - radius, center.y - radius)
+    drawArc(Faint.copy(alpha = 0.14f), -90f, 360f, false, topLeft, box, style = Stroke(1.5f * px))
+    if (fraction == null) return
 
-private fun smooth(x: Float): Float = x * x * (3 - 2 * x)
+    val sweep = 360f * fraction
+    drawArc(WavemothColors.Red, -90f, sweep, false, topLeft, box, style = Stroke((if (held) 3f else 2f) * px, cap = StrokeCap.Round))
+    val knob = polar(center, radius, angle(fraction))
+    if (held) drawCircle(WavemothColors.Red.copy(alpha = 0.22f), 15f * px, knob)
+    drawCircle(Color.White, (if (held) 7f else 4f) * px, knob)
+}

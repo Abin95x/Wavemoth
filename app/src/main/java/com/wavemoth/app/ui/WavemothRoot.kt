@@ -139,6 +139,10 @@ fun WavemothRoot(player: PlayerControls) {
     val isPlaying by rememberUpdatedState(state.isPlaying)
     val downloads = WavemothApp.instance.downloads
     val downloadStatus = downloads.status.collectAsState()
+    val homeShowsAlbum by WavemothApp.instance.settings.homeShowsAlbum.collectAsState()
+    val backStack by nav.currentBackStackEntryAsState()
+    // Home's Album view has the player controls, so the mini player would only repeat them.
+    val playerOnScreen = homeShowsAlbum && backStack?.destination?.route == "home"
 
     var showPlayer by rememberSaveable { mutableStateOf(false) }
     var options by remember { mutableStateOf<OptionsTarget?>(null) }
@@ -173,7 +177,7 @@ fun WavemothRoot(player: PlayerControls) {
                 bottomBar = {
                     Column(Modifier.background(WavemothColors.Background)) {
                         AnimatedVisibility(
-                            visible = state.current != null,
+                            visible = state.current != null && !playerOnScreen,
                             enter = expandVertically(tween(Motion.SLOW, easing = Motion.Emphasized)) + fadeIn(tween(Motion.MEDIUM)),
                             exit = shrinkVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) + fadeOut(tween(Motion.FAST)),
                         ) {
@@ -212,9 +216,12 @@ fun WavemothRoot(player: PlayerControls) {
                 ) {
                     composable("home") {
                         HomeScreen(
-                            current = state.current,
-                            isPlaying = state.isPlaying,
-                            progress = player.progress,
+                            state = state,
+                            player = player,
+                            liked = state.current?.id in likedIds,
+                            onToggleLike = { state.current?.let(library::toggleLike) },
+                            onDownload = { state.current?.let { downloads.download(listOf(it)) } },
+                            onMore = { state.current?.let { options = OptionsTarget(it, null) } },
                             onOpenPlayer = { showPlayer = true },
                             onOpenLiked = { nav.navigate("liked") },
                             onOpenDownloads = { nav.navigate("downloads") },

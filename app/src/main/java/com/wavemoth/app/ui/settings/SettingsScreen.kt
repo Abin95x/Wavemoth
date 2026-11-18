@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -21,6 +24,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -44,8 +49,10 @@ import androidx.media3.common.util.UnstableApi
 import coil.imageLoader
 import com.wavemoth.app.BuildConfig
 import com.wavemoth.app.WavemothApp
+import com.wavemoth.app.data.VisualizerStyle
 import com.wavemoth.app.ui.components.ConfirmDialog
 import com.wavemoth.app.ui.components.SectionLabel
+import com.wavemoth.app.ui.home.VisualizerPreview
 import com.wavemoth.app.ui.theme.WavemothColors
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +64,7 @@ import kotlinx.coroutines.withContext
 fun SettingsScreen(onBack: () -> Unit) {
     val app = WavemothApp.instance
     val stopOnSwipe by app.settings.stopOnSwipe.collectAsState()
+    val visualizerStyle by app.settings.visualizerStyle.collectAsState()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
@@ -87,6 +95,13 @@ fun SettingsScreen(onBack: () -> Unit) {
             onChange = app.settings::setStopOnSwipe,
         )
         InfoRow("Audio quality", "Highest available: Opus 160 kbps")
+
+        SectionHeader("Visualizer")
+        Column(Modifier.selectableGroup()) {
+            VisualizerStyle.entries.forEach { style ->
+                VisualizerStyleRow(style, selected = style == visualizerStyle) { app.settings.setVisualizerStyle(style) }
+            }
+        }
 
         SectionHeader("Downloads")
         InfoRow(
@@ -179,6 +194,31 @@ private fun InfoRow(title: String, subtitle: String, onClick: (() -> Unit)? = nu
     ) {
         Text(title, style = MaterialTheme.typography.bodyLarge, color = WavemothColors.TextPrimary)
         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = WavemothColors.TextSecondary)
+    }
+    HorizontalDivider(color = WavemothColors.Hairline, modifier = Modifier.padding(horizontal = 20.dp))
+}
+
+@Composable
+private fun VisualizerStyleRow(style: VisualizerStyle, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        VisualizerPreview(style, Modifier.size(56.dp).clip(CircleShape).background(Color.Black))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(style.label, style = MaterialTheme.typography.bodyLarge, color = WavemothColors.TextPrimary)
+            Text(style.description, style = MaterialTheme.typography.bodySmall, color = WavemothColors.TextSecondary)
+        }
+        Spacer(Modifier.width(12.dp))
+        RadioButton(
+            selected = selected,
+            onClick = null,  // the whole row selects
+            colors = RadioButtonDefaults.colors(selectedColor = WavemothColors.Red, unselectedColor = WavemothColors.TextSecondary),
+        )
     }
     HorizontalDivider(color = WavemothColors.Hairline, modifier = Modifier.padding(horizontal = 20.dp))
 }

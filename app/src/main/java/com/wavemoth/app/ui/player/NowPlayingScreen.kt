@@ -106,89 +106,126 @@ fun NowPlayingScreen(
     onMore: () -> Unit,
     onClose: () -> Unit,
 ) {
-    val song = state.current ?: return
-    var showQueue by remember { mutableStateOf(false) }
-    var showLyrics by remember { mutableStateOf(false) }
-
     // Swipe down: the screen follows the finger, then either closes or springs back.
     val dragY = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
-    // A soft red glow behind the cover that breathes slowly while music plays.
+    PlayerContent(
+        state = state,
+        progress = progress,
+        player = player,
+        liked = liked,
+        onToggleLike = onToggleLike,
+        onDownload = onDownload,
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                translationY = dragY.value
+                alpha = 1f - (dragY.value / (size.height * 1.5f)).coerceIn(0f, 0.5f)
+            }
+            .playerGlow(state.isPlaying)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            if (dragY.value > size.height * 0.18f) onClose()
+                            else dragY.animateTo(0f, Motion.softSpring)
+                        }
+                    },
+                    onDragCancel = { scope.launch { dragY.animateTo(0f, Motion.softSpring) } },
+                ) { change, dy ->
+                    change.consume()
+                    scope.launch { dragY.snapTo((dragY.value + dy).coerceAtLeast(0f)) }
+                }
+            }
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onClose) { Icon(Icons.Filled.KeyboardArrowDown, "Close player", tint = WavemothColors.TextPrimary, modifier = Modifier.size(30.dp)) }
+            NowPlayingHeading(state.source, Modifier.weight(1f))
+            IconButton(onClick = onMore) { Icon(Icons.Filled.MoreVert, "More options", tint = WavemothColors.TextPrimary) }
+        }
+    }
+}
+
+/** "NOW PLAYING" and where the music is playing from. */
+@Composable
+fun NowPlayingHeading(source: String, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall, color = WavemothColors.Red)
+        Text(
+            source.ifBlank { "Wavemoth" },
+            style = MaterialTheme.typography.titleSmall,
+            color = WavemothColors.TextSecondary,
+            maxLines = 1,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** The player's background: a soft red glow behind the cover that breathes while music plays. */
+@Composable
+fun Modifier.playerGlow(playing: Boolean): Modifier {
     val breathe = rememberInfiniteTransition(label = "glow")
     val pulse by breathe.animateFloat(0f, 1f, InfiniteRepeatableSpec(tween(3_200, easing = Motion.Emphasized), RepeatMode.Reverse), label = "pulse")
-    val glow by animateFloatAsState(if (state.isPlaying) 1f else 0.35f, tween(Motion.SLOW * 2), label = "glowLevel")
+    val glow by animateFloatAsState(if (playing) 1f else 0.35f, tween(Motion.SLOW * 2), label = "glowLevel")
+    return background(WavemothColors.Background).drawBehind {
+        val strength = glow * (0.16f + 0.08f * pulse)
+        drawRect(
+            Brush.radialGradient(
+                listOf(WavemothColors.RedDeep.copy(alpha = strength), Color.Transparent),
+                center = Offset(size.width / 2, size.height * 0.33f),
+                radius = size.width * 0.95f,
+            ),
+        )
+    }
+}
+
+/**
+ * The player itself: cover, song, seek bar and controls, plus lyrics, download and queue when
+ * [showExtras] is on. Shown full screen by [NowPlayingScreen] and, kept simpler, inside Home's
+ * Album view, each with its own [header].
+ */
+@Composable
+fun PlayerContent(
+    state: PlayerUiState,
+    progress: PlaybackProgress,
+    player: PlayerControls,
+    liked: Boolean,
+    onToggleLike: () -> Unit,
+    onDownload: () -> Unit,
+    modifier: Modifier = Modifier,
+    showExtras: Boolean = true,
+    header: @Composable () -> Unit,
+) {
+    val song = state.current ?: return
+    var showQueue by remember { mutableStateOf(false) }
+    var showLyrics by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    translationY = dragY.value
-                    alpha = 1f - (dragY.value / (size.height * 1.5f)).coerceIn(0f, 0.5f)
-                }
-                .background(WavemothColors.Background)
-                .drawBehind {
-                    val strength = glow * (0.16f + 0.08f * pulse)
-                    drawRect(
-                        Brush.radialGradient(
-                            listOf(WavemothColors.RedDeep.copy(alpha = strength), Color.Transparent),
-                            center = Offset(size.width / 2, size.height * 0.33f),
-                            radius = size.width * 0.95f,
-                        ),
-                    )
-                }
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragEnd = {
-                            scope.launch {
-                                if (dragY.value > size.height * 0.18f) onClose()
-                                else dragY.animateTo(0f, Motion.softSpring)
-                            }
-                        },
-                        onDragCancel = { scope.launch { dragY.animateTo(0f, Motion.softSpring) } },
-                    ) { change, dy ->
-                        change.consume()
-                        scope.launch { dragY.snapTo((dragY.value + dy).coerceAtLeast(0f)) }
-                    }
-                }
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 24.dp),
-        ) {
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) { Icon(Icons.Filled.KeyboardArrowDown, "Close player", tint = WavemothColors.TextPrimary, modifier = Modifier.size(30.dp)) }
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall, color = WavemothColors.Red)
-                    Text(
-                        state.source.ifBlank { "Wavemoth" },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = WavemothColors.TextSecondary,
-                        maxLines = 1,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-                IconButton(onClick = onMore) { Icon(Icons.Filled.MoreVert, "More options", tint = WavemothColors.TextPrimary) }
-            }
+        Column(modifier) {
+            header()
 
-            Spacer(Modifier.weight(1f))
-            // Swipe the cover for the next or previous song. It eases back a little while paused.
+            // The biggest square that fits. Swipe it for the next or previous song; it eases back a little while paused.
             val artScale by animateFloatAsState(if (state.isPlaying || state.isBuffering) 1f else 0.9f, Motion.softSpring, label = "artScale")
-            TrackSwiper(
-                current = song,
-                previous = state.previousSong,
-                next = state.nextSong,
-                onNext = player::next,
-                onPrevious = player::skipToPrevious,
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-            ) { s ->
-                Artwork(
-                    s.thumbnail,
-                    Modifier.fillMaxWidth().aspectRatio(1f).graphicsLayer { scaleX = artScale; scaleY = artScale },
-                    RoundedCornerShape(16.dp),
-                )
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TrackSwiper(
+                    current = song,
+                    previous = state.previousSong,
+                    next = state.nextSong,
+                    onNext = player::next,
+                    onPrevious = player::skipToPrevious,
+                    modifier = Modifier.aspectRatio(1f),
+                ) { s ->
+                    Artwork(
+                        s.thumbnail,
+                        Modifier.fillMaxWidth().aspectRatio(1f).graphicsLayer { scaleX = artScale; scaleY = artScale },
+                        RoundedCornerShape(16.dp),
+                    )
+                }
             }
-            Spacer(Modifier.weight(1f))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AnimatedContent(
@@ -249,14 +286,18 @@ fun NowPlayingScreen(
                 )
             }
 
-            Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { showLyrics = true }) {
-                    Icon(Icons.Filled.Lyrics, "Lyrics", tint = WavemothColors.TextSecondary)
+            if (showExtras) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { showLyrics = true }) {
+                        Icon(Icons.Filled.Lyrics, "Lyrics", tint = WavemothColors.TextSecondary)
+                    }
+                    DownloadIcon(rememberDownloadStatus(song.id), onDownload)
+                    IconButton(onClick = { showQueue = true }) {
+                        Icon(Icons.AutoMirrored.Filled.QueueMusic, "Queue", tint = WavemothColors.TextSecondary)
+                    }
                 }
-                DownloadIcon(rememberDownloadStatus(song.id), onDownload)
-                IconButton(onClick = { showQueue = true }) {
-                    Icon(Icons.AutoMirrored.Filled.QueueMusic, "Queue", tint = WavemothColors.TextSecondary)
-                }
+            } else {
+                Spacer(Modifier.height(24.dp))
             }
         }
 

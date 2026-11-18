@@ -25,7 +25,11 @@ import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTouchInput
+import com.wavemoth.app.data.VisualizerStyle
+import com.wavemoth.app.playback.PlaybackProgress
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -428,6 +432,41 @@ class AppUiTest {
         clickDesc("Queue")
         click("Beta Track")
         assertTrue("skipTo:1" in player.calls)
+    }
+
+    @Test
+    fun homeVisualizerControlsAlbumViewAndStyles() {
+        val songs = listOf(song(1, "Alpha Track"), song(2, "Beta Track"))
+        player.progress.value = PlaybackProgress(positionMs = 0, durationMs = 100_000)
+        launch(PlayerUiState(current = songs[0], queue = songs, queueIndex = 0, source = "Test Mix"))
+
+        // Inside the ring plays and pauses, with no button shown; the ring seeks. Neither opens the player.
+        assertTrue(rule.onAllNodesWithContentDescription("Play music").fetchSemanticsNodes().isEmpty())
+        val visualizer = rule.onNodeWithContentDescription("Music visualizer")
+        visualizer.performTouchInput { click(center) }; settle()
+        assertEquals(1, player.calls.count { it == "togglePlay" })
+        visualizer.performTouchInput { click(Offset(centerX + width * 0.443f, centerY)) }; settle()
+        assertTrue("seekTo:25000" in player.calls)
+        assertFalse(exists("NOW PLAYING"))
+        visualizer.performTouchInput { click(Offset(centerX + width * 0.25f, centerY)) }; settle()
+        assertEquals(2, player.calls.count { it == "togglePlay" })
+        assertFalse(exists("NOW PLAYING"))
+
+        // Album is a simple player on Home, so the mini player steps aside.
+        click("Album")
+        assertTrue(exists("NOW PLAYING") && exists("Test Mix"))
+        clickDesc("Shuffle")
+        assertTrue("toggleShuffle" in player.calls)
+        for (hidden in listOf("Close player", "Lyrics", "Download", "Queue")) {
+            assertTrue(hidden, rule.onAllNodesWithContentDescription(hidden).fetchSemanticsNodes().isEmpty())
+        }
+        click("Visualizer")
+        assertFalse(exists("NOW PLAYING"))
+
+        // The style is picked in Settings and remembered.
+        clickDesc("Settings")
+        rule.onNodeWithText("Sound Wave").performScrollTo().performClick(); settle()
+        assertEquals(VisualizerStyle.SoundWave, WavemothApp.instance.settings.visualizerStyle.value)
     }
 
     @Test

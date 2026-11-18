@@ -69,8 +69,9 @@ playlists and history live on your phone, not on someone's server.
 
 **Home**
 - Shortcuts to Liked Songs and Downloads
-- A circular music visualizer that moves with the song that's playing: bass at the bottom, treble at the top, loud bars turn red, and a red arc shows how far into the song you are. Tap it to open the player. It reads the audio inside the app, so it needs no microphone permission
-- Switch at the top between the equalizer and the playing song's album cover. Your choice is remembered
+- A music visualizer that moves with the song that's playing, in two styles you can pick in Settings: Classic and Sound Wave. It reads the audio inside the app, so it needs no microphone permission
+- Tap inside the visualizer to play or pause, tap or drag the red ring to seek, and tap the song name to open the player
+- Switch at the top between the visualizer and the Album view, which puts the cover, seek bar and playback controls right on Home. Your choice is remembered
 
 **Downloads**
 - Download any playlist, album or Liked Songs with one tap, or your whole library from Library → ⋮ → Download all songs
@@ -181,7 +182,7 @@ and fake search results, so they don't touch the network.
 | Offline downloads (Media3 DownloadManager) | `download/Downloads.kt`, `download/DownloadsService.kt` |
 | Audio fetched in short ranged requests, so YouTube doesn't throttle it | `playback/ChunkedDataSource.kt` |
 | Autoplay radio scoring | `data/Radio.kt`, `data/SkipHistory.kt` |
-| Home visualizer: audio tapped on its way to the speaker, FFT into frequency bands | `playback/AudioSpectrum.kt`, `ui/home/Visualizer.kt` |
+| Home visualizer: audio tapped on its way to the speaker, FFT into frequency bands | `playback/AudioSpectrum.kt`, `ui/home/Visualizer.kt`, `ui/home/VisualizerStyles.kt` |
 | Resume where you left off (queue, song, position) | `playback/LastSession.kt` |
 | Lyrics (LRCLIB + LRC parser) | `data/Lyrics.kt` |
 | Library, playlists, backup | `data/LibraryRepository.kt` |

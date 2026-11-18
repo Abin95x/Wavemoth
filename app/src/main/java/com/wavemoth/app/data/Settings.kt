@@ -41,7 +41,7 @@ class Settings(context: Context) {
 
     private val _homeShowsAlbum = MutableStateFlow(prefs.getBoolean(KEY_HOME_ALBUM, false))
 
-    /** Home shows the playing song's cover instead of the equalizer. Off by default. */
+    /** Home shows the player for the playing song instead of the visualizer. Off by default. */
     val homeShowsAlbum: StateFlow<Boolean> = _homeShowsAlbum.asStateFlow()
 
     fun setHomeShowsAlbum(album: Boolean) {
@@ -49,10 +49,21 @@ class Settings(context: Context) {
         _homeShowsAlbum.value = album
     }
 
+    private val _visualizerStyle = MutableStateFlow(VisualizerStyle.fromName(prefs.getString(KEY_VISUALIZER_STYLE, null)))
+
+    /** How the Home visualizer looks. Classic by default. */
+    val visualizerStyle: StateFlow<VisualizerStyle> = _visualizerStyle.asStateFlow()
+
+    fun setVisualizerStyle(style: VisualizerStyle) {
+        prefs.edit().putString(KEY_VISUALIZER_STYLE, style.name).apply()
+        _visualizerStyle.value = style
+    }
+
     private companion object {
         const val KEY_STOP_ON_SWIPE = "stop_on_swipe"
         const val KEY_LIBRARY_GRID = "library_grid"
         const val KEY_LIKED_SORT = "liked_sort"
         const val KEY_HOME_ALBUM = "home_album"
+        const val KEY_VISUALIZER_STYLE = "visualizer_style"
     }
 }
